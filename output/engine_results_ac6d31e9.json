@@ -1,0 +1,659 @@
+{
+  "doc_id": "ac6d31e9",
+  "sector": "Metro",
+  "consistency": {
+    "doc_id": "ac6d31e9",
+    "sector": "Metro",
+    "total_issues": 31,
+    "by_severity": {
+      "CRITICAL": 2,
+      "HIGH": 23,
+      "MEDIUM": 6,
+      "LOW": 0
+    },
+    "by_type": {
+      "numeric_mismatch": 23,
+      "missing_dependency": 3,
+      "llm_flagged": 5
+    },
+    "issues": [
+      {
+        "id": "7feeca6d-80b7-4451-963a-f9e8a7d225b3",
+        "type": "numeric_mismatch",
+        "severity": "HIGH",
+        "description": "'corridor length \u2192 total length' has inconsistent values across pages: [45800.0, 26100.0, 47000.0, 118900.0, 107560.0] (diff=78%)",
+        "pages": [
+          16,
+          61
+        ],
+        "evidence": "Values found: [45800.0, 26100.0, 47000.0, 118900.0, 107560.0]"
+      },
+      {
+        "id": "ac29c7a0-f0ac-48a7-a98e-07d9a296da3c",
+        "type": "numeric_mismatch",
+        "severity": "HIGH",
+        "description": "'train operation \u2192 headway' has inconsistent values across pages: [514.0, 600.0, 450.0, 277.0, 450.0] (diff=60%)",
+        "pages": [
+          17,
+          323
+        ],
+        "evidence": "Values found: [514.0, 600.0, 450.0, 277.0, 450.0]"
+      },
+      {
+        "id": "5efc21c5-0197-4b36-8095-3f84f1b5dedf",
+        "type": "numeric_mismatch",
+        "severity": "HIGH",
+        "description": "'corridor length \u2192 length' has inconsistent values across pages: [45810.0, 26085.2, 9823.0, 26085.2, 4876.0] (diff=98%)",
+        "pages": [
+          27,
+          133,
+          134,
+          147,
+          149,
+          154,
+          164,
+          166,
+          167,
+          168,
+          169,
+          216,
+          321,
+          322,
+          334,
+          335,
+          373,
+          540
+        ],
+        "evidence": "Values found: [45810.0, 26085.2, 9823.0, 26085.2, 4876.0]"
+      },
+      {
+        "id": "32636016-36c8-44e1-ba85-36422f0085ec",
+        "type": "numeric_mismatch",
+        "severity": "HIGH",
+        "description": "'number of stations \u2192 count' has inconsistent values across pages: [50.0, 12.0, 35.0, 39.0, 20.0] (diff=76%)",
+        "pages": [
+          27,
+          134,
+          154,
+          166,
+          373
+        ],
+        "evidence": "Values found: [50.0, 12.0, 35.0, 39.0, 20.0]"
+      },
+      {
+        "id": "9cc7b579-4d7c-4e3d-bdb5-0703f0dacf14",
+        "type": "numeric_mismatch",
+        "severity": "HIGH",
+        "description": "'corridor-4 \u2192 length' has inconsistent values across pages: [26085.0, 17120.0] (diff=34%)",
+        "pages": [
+          28,
+          199
+        ],
+        "evidence": "Values found: [26085.0, 17120.0]"
+      },
+      {
+        "id": "1a62e63e-1b5d-4ea1-b54b-14469e490c2c",
+        "type": "numeric_mismatch",
+        "severity": "HIGH",
+        "description": "'corridor-4 \u2192 number_of_stations' has inconsistent values across pages: [30.0, 20.0] (diff=33%)",
+        "pages": [
+          28,
+          199
+        ],
+        "evidence": "Values found: [30.0, 20.0]"
+      },
+      {
+        "id": "329b5b7c-46d2-4671-961b-b41e0508afd4",
+        "type": "numeric_mismatch",
+        "severity": "MEDIUM",
+        "description": "'corridor-5 \u2192 length' has inconsistent values across pages: [47000.0, 37130.0] (diff=21%)",
+        "pages": [
+          28,
+          199
+        ],
+        "evidence": "Values found: [47000.0, 37130.0]"
+      },
+      {
+        "id": "cb909e8e-4960-4a65-92a3-ecd2f906e8a0",
+        "type": "numeric_mismatch",
+        "severity": "MEDIUM",
+        "description": "'corridor-5 \u2192 number_of_stations' has inconsistent values across pages: [48.0, 38.0] (diff=21%)",
+        "pages": [
+          28,
+          199
+        ],
+        "evidence": "Values found: [48.0, 38.0]"
+      },
+      {
+        "id": "f977dcc7-8b14-4e9b-a09e-4905b3bbe656",
+        "type": "numeric_mismatch",
+        "severity": "MEDIUM",
+        "description": "'corridor 3 \u2192 length' has inconsistent values across pages: [40200.0, 45800.0, 40200.0, 45810.0] (diff=12%)",
+        "pages": [
+          60,
+          87,
+          109,
+          111
+        ],
+        "evidence": "Values found: [40200.0, 45800.0, 40200.0, 45810.0]"
+      },
+      {
+        "id": "b761cf1e-1fdf-4f9e-9d45-89d377b3ca94",
+        "type": "numeric_mismatch",
+        "severity": "HIGH",
+        "description": "'corridor 4 \u2192 length' has inconsistent values across pages: [14000.0, 26100.0, 17120.0] (diff=46%)",
+        "pages": [
+          60,
+          87,
+          111
+        ],
+        "evidence": "Values found: [14000.0, 26100.0, 17120.0]"
+      },
+      {
+        "id": "bae758b1-f15f-4767-9479-720e149839a4",
+        "type": "numeric_mismatch",
+        "severity": "MEDIUM",
+        "description": "'corridor 5 \u2192 length' has inconsistent values across pages: [34700.0, 47000.0, 44630.0] (diff=26%)",
+        "pages": [
+          60,
+          87,
+          111
+        ],
+        "evidence": "Values found: [34700.0, 47000.0, 44630.0]"
+      },
+      {
+        "id": "cb09126a-e98a-4818-a2d3-41c58fabae38",
+        "type": "numeric_mismatch",
+        "severity": "HIGH",
+        "description": "'stations \u2192 number' has inconsistent values across pages: [128.0, 13.0, 30.0, 30.0, 48.0] (diff=90%)",
+        "pages": [
+          87,
+          110,
+          112,
+          537,
+          540
+        ],
+        "evidence": "Values found: [128.0, 13.0, 30.0, 30.0, 48.0]"
+      },
+      {
+        "id": "06de6751-2a39-4653-af00-5de457001dc5",
+        "type": "numeric_mismatch",
+        "severity": "HIGH",
+        "description": "'corridor 4 \u2192 stations' has inconsistent values across pages: [30.0, 20.0] (diff=33%)",
+        "pages": [
+          87,
+          111
+        ],
+        "evidence": "Values found: [30.0, 20.0]"
+      },
+      {
+        "id": "67a5ac69-f576-4566-a8a1-a4a0bb5187d9",
+        "type": "numeric_mismatch",
+        "severity": "HIGH",
+        "description": "'elevated section length \u2192 length' has inconsistent values across pages: [19100.0, 16014.0, 5689.0, 34907.6] (diff=84%)",
+        "pages": [
+          119,
+          147,
+          164
+        ],
+        "evidence": "Values found: [19100.0, 16014.0, 5689.0, 34907.6]"
+      },
+      {
+        "id": "dfa8236d-0264-4694-99f1-943a6d0446b1",
+        "type": "numeric_mismatch",
+        "severity": "HIGH",
+        "description": "'station depth/height \u2192 depth' has inconsistent values across pages: [-22.0, -15.0, -8.0, -8.0, -8.0] (diff=151%)",
+        "pages": [
+          134,
+          149,
+          154,
+          166,
+          215,
+          216
+        ],
+        "evidence": "Values found: [-22.0, -15.0, -8.0, -8.0, -8.0]"
+      },
+      {
+        "id": "7bc121d3-39dd-455d-80ec-2a767eaea95f",
+        "type": "numeric_mismatch",
+        "severity": "HIGH",
+        "description": "'underground section length \u2192 length' has inconsistent values across pages: [10071.2, 958.6, 4876.0] (diff=90%)",
+        "pages": [
+          147,
+          164
+        ],
+        "evidence": "Values found: [10071.2, 958.6, 4876.0]"
+      },
+      {
+        "id": "b27ce6e6-754f-40c7-bf92-29327337ba6f",
+        "type": "numeric_mismatch",
+        "severity": "HIGH",
+        "description": "'station depth/height \u2192 elevation' has inconsistent values across pages: [28.5, 38.68, 29.03, 26.44, 25.02] (diff=60%)",
+        "pages": [
+          166,
+          169
+        ],
+        "evidence": "Values found: [28.5, 38.68, 29.03, 26.44, 25.02]"
+      },
+      {
+        "id": "d2a2fac3-57b7-4e00-aaf2-dcb4272b4b6d",
+        "type": "numeric_mismatch",
+        "severity": "HIGH",
+        "description": "'headway \u2192 value' has inconsistent values across pages: [514.0, 600.0, 600.0, 240.0, 514.0] (diff=99%)",
+        "pages": [
+          322,
+          329,
+          330,
+          332,
+          372
+        ],
+        "evidence": "Values found: [514.0, 600.0, 600.0, 240.0, 514.0]"
+      },
+      {
+        "id": "fd9132bc-c6d7-419c-86f0-40de185e9580",
+        "type": "numeric_mismatch",
+        "severity": "HIGH",
+        "description": "'train operation plan \u2192 headway' has inconsistent values across pages: [277.0, 8.6, 10.0, 12.0, 15.0] (diff=97%)",
+        "pages": [
+          328,
+          331
+        ],
+        "evidence": "Values found: [277.0, 8.6, 10.0, 12.0, 15.0]"
+      },
+      {
+        "id": "8c6cf052-8f98-4103-b0e7-f2f58fb32695",
+        "type": "numeric_mismatch",
+        "severity": "HIGH",
+        "description": "'underground section by t.b.m. \u2192 length' has inconsistent values across pages: [190150.0, 193.92, 190150.0] (diff=100%)",
+        "pages": [
+          535,
+          538,
+          541
+        ],
+        "evidence": "Values found: [190150.0, 193.92, 190150.0]"
+      },
+      {
+        "id": "16238afe-1be6-4c46-b083-611f4dcc8acf",
+        "type": "numeric_mismatch",
+        "severity": "MEDIUM",
+        "description": "'underground station \u2192 length' has inconsistent values across pages: [190.0, 150.0, 150.0, 190.0, 150.0] (diff=21%)",
+        "pages": [
+          535,
+          538,
+          541,
+          542
+        ],
+        "evidence": "Values found: [190.0, 150.0, 150.0, 190.0, 150.0]"
+      },
+      {
+        "id": "221a76d8-1be0-49bb-8702-c969b87e4c46",
+        "type": "numeric_mismatch",
+        "severity": "HIGH",
+        "description": "'elevated station buildings \u2192 length' has inconsistent values across pages: [14021.95, 140.0] (diff=99%)",
+        "pages": [
+          535,
+          538
+        ],
+        "evidence": "Values found: [14021.95, 140.0]"
+      },
+      {
+        "id": "e8b19014-7dea-44b2-856b-7082f16564fe",
+        "type": "numeric_mismatch",
+        "severity": "HIGH",
+        "description": "'u/g section by cut & cover \u2192 length' has inconsistent values across pages: [148.75, 0.61] (diff=100%)",
+        "pages": [
+          538,
+          541
+        ],
+        "evidence": "Values found: [148.75, 0.612]"
+      },
+      {
+        "id": "3828e46d-2352-4c30-962a-50bb7dfd5f8b",
+        "type": "missing_dependency",
+        "severity": "HIGH",
+        "description": "'number_of_stations' is specified in the DPR but its prerequisite '['total_length', 'average_station_spacing']' is not found.",
+        "pages": [
+          28,
+          109,
+          199
+        ],
+        "evidence": "Dependency: Number of stations is based on the length and spacing between them.. Expected check: if number_of_stations != (total_length / average_station_spacing) then error"
+      },
+      {
+        "id": "b6863675-c26a-4bce-8f3e-ed491b129e6b",
+        "type": "missing_dependency",
+        "severity": "HIGH",
+        "description": "'number_of_stations' is specified in the DPR but its prerequisite '['corridor_length', 'average_station_spacing']' is not found.",
+        "pages": [
+          28,
+          109,
+          199
+        ],
+        "evidence": "Dependency: Number of stations depends on corridor length and average spacing between stations.. Expected check: number_of_stations = corridor_length / average_station_spacing + 1"
+      },
+      {
+        "id": "ded29544-befa-4a30-a595-ff6cd06d5417",
+        "type": "missing_dependency",
+        "severity": "HIGH",
+        "description": "'headway' is specified in the DPR but its prerequisite '['design_speed', 'train_length']' is not found.",
+        "pages": [
+          17,
+          33
+        ],
+        "evidence": "Dependency: Headway depends on train speed and length to ensure safe operation.. Expected check: if headway < ((train_length + safety_margin) / design_speed) then error"
+      },
+      {
+        "id": "6797b9f2-f491-4fa4-8204-70c5fdd9f738",
+        "type": "llm_flagged",
+        "severity": "CRITICAL",
+        "description": "Conflicting total corridor length.",
+        "pages": [],
+        "evidence": "[47000 m, 45800 m, 118900 m, 26100 m]"
+      },
+      {
+        "id": "64428671-6b54-444f-b4c5-464397f836d3",
+        "type": "llm_flagged",
+        "severity": "HIGH",
+        "description": "Conflicting number of underground stations.",
+        "pages": [],
+        "evidence": "[30, 12, 48]"
+      },
+      {
+        "id": "9d8542a6-158b-47aa-9171-75e14e9091d0",
+        "type": "llm_flagged",
+        "severity": "CRITICAL",
+        "description": "Conflicting total station count.",
+        "pages": [],
+        "evidence": "[54, 30, 128, 50]"
+      },
+      {
+        "id": "2d9cc84a-f458-41ee-856c-7c414edede75",
+        "type": "llm_flagged",
+        "severity": "HIGH",
+        "description": "Conflicting elevated length.",
+        "pages": [],
+        "evidence": "[19100 m, 41200 m, 16000 m]"
+      },
+      {
+        "id": "1ffcfc88-a0d0-484d-90d8-37bd2c57b1ba",
+        "type": "llm_flagged",
+        "severity": "MEDIUM",
+        "description": "Conflicting peak power demand values.",
+        "pages": [],
+        "evidence": "[3.51 MVA, 2.14 MVA, 4.88 MVA, 5.65 MVA]"
+      }
+    ]
+  },
+  "anomaly": {
+    "doc_id": "ac6d31e9",
+    "sector": "Metro",
+    "total_flags": 28,
+    "by_type": {
+      "statistical_outlier": 6,
+      "oom_error": 17,
+      "duplicate_values": 0,
+      "unit_mismatch": 0,
+      "llm_flagged": 5
+    },
+    "by_severity": {
+      "CRITICAL": 0,
+      "HIGH": 23,
+      "MEDIUM": 4,
+      "LOW": 1
+    },
+    "flags": [
+      {
+        "id": "d6aba08d-3ad2-4e63-b15b-50a8740447d9",
+        "type": "statistical_outlier",
+        "severity": "MEDIUM",
+        "description": "'length' value 119000.0 m is a statistical outlier (z=3.2, mean=21289.71, \u03c3=30843.05)",
+        "attribute": "length",
+        "flagged_value": "119000.0",
+        "expected_range": "-40396.39 \u2013 82975.81"
+      },
+      {
+        "id": "06859956-3b25-44bf-b588-a41548bcf22d",
+        "type": "statistical_outlier",
+        "severity": "HIGH",
+        "description": "'length' value 190150.0  is a statistical outlier (z=5.5, mean=21289.71, \u03c3=30843.05)",
+        "attribute": "length",
+        "flagged_value": "190150.0",
+        "expected_range": "-40396.39 \u2013 82975.81"
+      },
+      {
+        "id": "1583563e-0840-4f95-a8cd-6aabdfe1b175",
+        "type": "statistical_outlier",
+        "severity": "HIGH",
+        "description": "'length' value 190150.0  is a statistical outlier (z=5.5, mean=21289.71, \u03c3=30843.05)",
+        "attribute": "length",
+        "flagged_value": "190150.0",
+        "expected_range": "-40396.39 \u2013 82975.81"
+      },
+      {
+        "id": "617dae3d-0598-4bb7-b675-29d47d3e69f9",
+        "type": "statistical_outlier",
+        "severity": "HIGH",
+        "description": "'value' value 23640623006082.0  is a statistical outlier (z=4.9, mean=1103241487511.29, \u03c3=4593070069699.61)",
+        "attribute": "value",
+        "flagged_value": "23640623006082.0",
+        "expected_range": "-8082898651887.94 \u2013 10289381626910.52"
+      },
+      {
+        "id": "f2a54991-ea96-4f33-aa83-9d2c69b36c80",
+        "type": "statistical_outlier",
+        "severity": "HIGH",
+        "description": "'distance' value 46272.0 m is a statistical outlier (z=6.1, mean=3740.83, \u03c3=7028.68)",
+        "attribute": "distance",
+        "flagged_value": "46272.0",
+        "expected_range": "-10316.53 \u2013 17798.19"
+      },
+      {
+        "id": "09e8a09c-a008-4e01-b694-19704833ed20",
+        "type": "statistical_outlier",
+        "severity": "MEDIUM",
+        "description": "'distance between stations' value 1849.0 m is a statistical outlier (z=3.5, mean=1025.47, \u03c3=237.83)",
+        "attribute": "distance between stations",
+        "flagged_value": "1849.0",
+        "expected_range": "549.81 \u2013 1501.13"
+      },
+      {
+        "id": "b20c6a6f-edd1-4449-82f9-25a38fa98c38",
+        "type": "oom_error",
+        "severity": "HIGH",
+        "description": "'depth_below_ground_level' value -17.1 m appears to be an order-of-magnitude error. Expected range: 0.1\u2013100 m. Possible decimal placement mistake?",
+        "attribute": "depth_below_ground_level",
+        "flagged_value": "-17.1",
+        "expected_range": "0.1\u2013100 m"
+      },
+      {
+        "id": "855eef8e-711d-441b-b674-aa2792afde5e",
+        "type": "oom_error",
+        "severity": "HIGH",
+        "description": "'depth_below_ground_level' value -29.6 m appears to be an order-of-magnitude error. Expected range: 0.1\u2013100 m. Possible decimal placement mistake?",
+        "attribute": "depth_below_ground_level",
+        "flagged_value": "-29.6",
+        "expected_range": "0.1\u2013100 m"
+      },
+      {
+        "id": "18c7d2ff-16b9-42ee-b5ca-16d0f539519f",
+        "type": "oom_error",
+        "severity": "HIGH",
+        "description": "'depth_below_ground_level' value -22.0 m appears to be an order-of-magnitude error. Expected range: 0.1\u2013100 m. Possible decimal placement mistake?",
+        "attribute": "depth_below_ground_level",
+        "flagged_value": "-22.0",
+        "expected_range": "0.1\u2013100 m"
+      },
+      {
+        "id": "964fe427-27f8-48b6-9442-5e37c7402104",
+        "type": "oom_error",
+        "severity": "HIGH",
+        "description": "'depth_below_ground_level' value -15.0 m appears to be an order-of-magnitude error. Expected range: 0.1\u2013100 m. Possible decimal placement mistake?",
+        "attribute": "depth_below_ground_level",
+        "flagged_value": "-15.0",
+        "expected_range": "0.1\u2013100 m"
+      },
+      {
+        "id": "88a13298-7aa8-4975-9774-047bee3fbd6e",
+        "type": "oom_error",
+        "severity": "HIGH",
+        "description": "'depth' value -15.0 m appears to be an order-of-magnitude error. Expected range: 0.1\u2013100 m. Possible decimal placement mistake?",
+        "attribute": "depth",
+        "flagged_value": "-15.0",
+        "expected_range": "0.1\u2013100 m"
+      },
+      {
+        "id": "dea854c2-cc2c-4c58-8c94-f7d2087194de",
+        "type": "oom_error",
+        "severity": "HIGH",
+        "description": "'depth' value -22.0 m appears to be an order-of-magnitude error. Expected range: 0.1\u2013100 m. Possible decimal placement mistake?",
+        "attribute": "depth",
+        "flagged_value": "-22.0",
+        "expected_range": "0.1\u2013100 m"
+      },
+      {
+        "id": "b3c35190-8f7e-4127-bbe4-bbd60fa4ec3c",
+        "type": "oom_error",
+        "severity": "HIGH",
+        "description": "'depth' value -15.0 m appears to be an order-of-magnitude error. Expected range: 0.1\u2013100 m. Possible decimal placement mistake?",
+        "attribute": "depth",
+        "flagged_value": "-15.0",
+        "expected_range": "0.1\u2013100 m"
+      },
+      {
+        "id": "7797fde4-3fbe-4ab1-a832-6cfff52d0816",
+        "type": "oom_error",
+        "severity": "HIGH",
+        "description": "'depth below ground level' value -15.0 m appears to be an order-of-magnitude error. Expected range: 0.1\u2013100 m. Possible decimal placement mistake?",
+        "attribute": "depth below ground level",
+        "flagged_value": "-15.0",
+        "expected_range": "0.1\u2013100 m"
+      },
+      {
+        "id": "854b2e05-1a60-4b12-a763-e5af4c689ac5",
+        "type": "oom_error",
+        "severity": "HIGH",
+        "description": "'depth/height' value -386.0 m appears to be an order-of-magnitude error. Expected range: 0.1\u2013100 m. Possible decimal placement mistake?",
+        "attribute": "depth/height",
+        "flagged_value": "-386.0",
+        "expected_range": "0.1\u2013100 m"
+      },
+      {
+        "id": "b9720e0e-b44c-4b97-bb20-da3eaaf8e3c9",
+        "type": "oom_error",
+        "severity": "HIGH",
+        "description": "'depth' value -8.0 m appears to be an order-of-magnitude error. Expected range: 0.1\u2013100 m. Possible decimal placement mistake?",
+        "attribute": "depth",
+        "flagged_value": "-8.0",
+        "expected_range": "0.1\u2013100 m"
+      },
+      {
+        "id": "5f78cddf-5a00-4cdb-801c-94cb79313a2d",
+        "type": "oom_error",
+        "severity": "HIGH",
+        "description": "'depth' value -8.0 m appears to be an order-of-magnitude error. Expected range: 0.1\u2013100 m. Possible decimal placement mistake?",
+        "attribute": "depth",
+        "flagged_value": "-8.0",
+        "expected_range": "0.1\u2013100 m"
+      },
+      {
+        "id": "fe5351c9-35ed-458b-9788-e178d17ce320",
+        "type": "oom_error",
+        "severity": "HIGH",
+        "description": "'depth' value -8.0 m appears to be an order-of-magnitude error. Expected range: 0.1\u2013100 m. Possible decimal placement mistake?",
+        "attribute": "depth",
+        "flagged_value": "-8.0",
+        "expected_range": "0.1\u2013100 m"
+      },
+      {
+        "id": "1b0530cd-4b31-4d38-abe5-3ec1308d3bc8",
+        "type": "oom_error",
+        "severity": "HIGH",
+        "description": "'depth' value -8.0 m appears to be an order-of-magnitude error. Expected range: 0.1\u2013100 m. Possible decimal placement mistake?",
+        "attribute": "depth",
+        "flagged_value": "-8.0",
+        "expected_range": "0.1\u2013100 m"
+      },
+      {
+        "id": "0f60eddd-74b0-488e-9220-a09ec8e3a0a0",
+        "type": "oom_error",
+        "severity": "HIGH",
+        "description": "'depth' value -8.0 m appears to be an order-of-magnitude error. Expected range: 0.1\u2013100 m. Possible decimal placement mistake?",
+        "attribute": "depth",
+        "flagged_value": "-8.0",
+        "expected_range": "0.1\u2013100 m"
+      },
+      {
+        "id": "c75ab3a0-d0c4-412c-a28a-a845ec529817",
+        "type": "oom_error",
+        "severity": "HIGH",
+        "description": "'depth' value -15.0 m appears to be an order-of-magnitude error. Expected range: 0.1\u2013100 m. Possible decimal placement mistake?",
+        "attribute": "depth",
+        "flagged_value": "-15.0",
+        "expected_range": "0.1\u2013100 m"
+      },
+      {
+        "id": "abb02563-7f43-4fd6-88ea-830260083a5b",
+        "type": "oom_error",
+        "severity": "HIGH",
+        "description": "'depth' value -29.84 m appears to be an order-of-magnitude error. Expected range: 0.1\u2013100 m. Possible decimal placement mistake?",
+        "attribute": "depth",
+        "flagged_value": "-29.84",
+        "expected_range": "0.1\u2013100 m"
+      },
+      {
+        "id": "fb8c0cca-1661-4b39-a819-667b8f179954",
+        "type": "oom_error",
+        "severity": "HIGH",
+        "description": "'depth' value -30.61 m appears to be an order-of-magnitude error. Expected range: 0.1\u2013100 m. Possible decimal placement mistake?",
+        "attribute": "depth",
+        "flagged_value": "-30.61",
+        "expected_range": "0.1\u2013100 m"
+      },
+      {
+        "id": "9c9ce89d-417d-48cd-bf57-e9ce3116c620",
+        "type": "llm_flagged",
+        "severity": "HIGH",
+        "description": "Total length of the corridor is inconsistent.",
+        "attribute": "total length",
+        "flagged_value": "118900 m",
+        "expected_range": "The total length of 118,900 meters seems unusually high compared to other lengths provided (45,800m and 47,000m)."
+      },
+      {
+        "id": "51dcfd71-6de0-41f0-92a8-c664fc440337",
+        "type": "llm_flagged",
+        "severity": "HIGH",
+        "description": "Total number of stations is inconsistent.",
+        "attribute": "total stations",
+        "flagged_value": "128",
+        "expected_range": "The total station count of 128 seems unusually high compared to other counts provided (50 and 54)."
+      },
+      {
+        "id": "f8c2802f-7fc9-4370-8b51-6111c65ef618",
+        "type": "llm_flagged",
+        "severity": "MEDIUM",
+        "description": "Elevated length is inconsistent.",
+        "attribute": "elevated length",
+        "flagged_value": "16000 m",
+        "expected_range": "The elevated length of 16,000 meters seems unusually low compared to other lengths provided (41,200m and 19,100m)."
+      },
+      {
+        "id": "2d88d638-5fb6-4c7f-b0d1-468d78092d09",
+        "type": "llm_flagged",
+        "severity": "MEDIUM",
+        "description": "Underground length is inconsistent.",
+        "attribute": "underground length",
+        "flagged_value": "5800 m",
+        "expected_range": "The underground length of 5,800 meters seems unusually low compared to other lengths provided (26,700m and 10,100m)."
+      },
+      {
+        "id": "c320f486-c297-496f-92d7-344f584adada",
+        "type": "llm_flagged",
+        "severity": "LOW",
+        "description": "Headway time is inconsistent.",
+        "attribute": "headway",
+        "flagged_value": "450 sec",
+        "expected_range": "The headway of 450 seconds seems unusually high compared to other times provided (277s, 514s and 600s)."
+      }
+    ]
+  }
+}
