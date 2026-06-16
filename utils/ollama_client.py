@@ -68,12 +68,13 @@ def generate(prompt: str, system: str = "", model: str = None, temperature: floa
 def generate_json(prompt: str, system: str = "", model: str = None) -> dict | list | None:
     """
     Generate and parse JSON from Ollama.
-    Strips markdown fences, handles partial JSON gracefully.
+    Handles: markdown fences, multiple objects (wraps into array),
+    truncated responses, and extra text after valid JSON.
     """
     json_system = (system + "\n\n" if system else "") + (
         "You MUST respond with valid JSON only. "
         "No markdown, no explanation, no preamble. "
-        "Start your response directly with { or [."
+        "Start your response directly with { or [ as appropriate."
     )
     raw = generate(prompt, system=json_system, model=model, temperature=0.05)
 
@@ -82,16 +83,71 @@ def generate_json(prompt: str, system: str = "", model: str = None) -> dict | li
     raw = re.sub(r"\s*```$", "", raw, flags=re.MULTILINE)
     raw = raw.strip()
 
-    # Extract first JSON object/array from the string
-    match = re.search(r"(\{.*\}|\[.*\])", raw, re.DOTALL)
-    if match:
-        raw = match.group(1)
-
+    # Try 1: direct parse
     try:
         return json.loads(raw)
-    except json.JSONDecodeError as e:
-        logger.warning(f"JSON parse failed: {e}. Raw snippet: {raw[:200]}")
-        return None
+    except json.JSONDecodeError:
+        pass
+
+    # Try 2: extract first complete array [ ... ]
+    match = re.search(r"(\[.*?\])", raw, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(1))
+        except json.JSONDecodeError:
+            pass
+
+    # Try 3: LLM returned multiple JSON objects instead of an array
+    # e.g. {...}{...}{...} — collect all and wrap into array
+    objects = []
+    pos = 0
+    while pos < len(raw):
+        # Find next { or [
+        start = -1
+        for i in range(pos, len(raw)):
+            if raw[i] in ('{', '['):
+                start = i
+                break
+        if start == -1:
+            break
+        # Try to find matching closing brace using depth counter
+        depth = 0
+        open_char  = raw[start]
+        close_char = '}' if open_char == '{' else ']'
+        for i in range(start, len(raw)):
+            if raw[i] == open_char:
+                depth += 1
+            elif raw[i] == close_char:
+                depth -= 1
+                if depth == 0:
+                    candidate = raw[start:i+1]
+                    try:
+                        parsed = json.loads(candidate)
+                        if isinstance(parsed, dict):
+                            objects.append(parsed)
+                        elif isinstance(parsed, list):
+                            objects.extend(parsed)
+                        pos = i + 1
+                    except json.JSONDecodeError:
+                        pos = start + 1
+                    break
+        else:
+            break
+
+    if objects:
+        return objects
+
+    # Try 4: truncated JSON — try json_repair if available
+    try:
+        import json_repair
+        result = json_repair.loads(raw)
+        if result:
+            return result
+    except (ImportError, Exception):
+        pass
+
+    logger.warning(f"JSON parse failed after all attempts. Raw snippet: {raw[:200]}")
+    return None
 
 
 # ─── Vision calls (for table / image extraction) ─────────────────────────────

@@ -28,7 +28,8 @@ from utils.neo4j_client import run_write, run_read
 
 _ONTO_SYSTEM = """You are an ontology engineer creating a domain ontology for infrastructure 
 engineering DPR validation. Generate a practical, minimal ontology focused on enabling 
-dependency checking and validation — not an academic exercise."""
+dependency checking and validation — not an academic exercise.
+IMPORTANT: Respond with a single JSON object starting with { not an array."""
 
 
 def _build_ontology_prompt(facts_sample: list[dict], sector: str) -> str:
@@ -194,9 +195,22 @@ def generate_ontology(doc_id: str, sector: str) -> dict:
     prompt = _build_ontology_prompt(facts, sector)
     ontology = generate_json(prompt, system=_ONTO_SYSTEM)
 
+    # LLM may return a list (due to global array enforcement) or invalid structure
+    if isinstance(ontology, list):
+        # Try to find a dict inside the list
+        for item in ontology:
+            if isinstance(item, dict) and "classes" in item:
+                ontology = item
+                break
+        else:
+            ontology = {"classes": [], "dependencies": [], "sector_specific_entities": []}
     if not isinstance(ontology, dict):
         logger.error("Ontology generation failed — LLM returned invalid structure")
         ontology = {"classes": [], "dependencies": [], "sector_specific_entities": []}
+    # Ensure required keys exist
+    ontology.setdefault("classes", [])
+    ontology.setdefault("dependencies", [])
+    ontology.setdefault("sector_specific_entities", [])
 
     _write_ontology_to_neo4j(ontology, doc_id, sector)
     return ontology

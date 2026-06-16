@@ -1,0 +1,800 @@
+{
+  "dpr": {
+    "doc_id": "a894e1af",
+    "sector": "Rail Infrastructure",
+    "total_facts": 978,
+    "table_pages": 289
+  },
+  "rulebooks": [
+    {
+      "doc_id": "ac41846d_rules",
+      "standard_name": "RITES DPR Appraisal Tool",
+      "sector": "Rail Infrastructure",
+      "total_rules": 15
+    }
+  ],
+  "push": {
+    "doc_id": "a894e1af",
+    "rulebook_ids": [
+      "ac41846d_rules"
+    ],
+    "pushed": {
+      "facts": 978,
+      "table_rows": 5954,
+      "rules": 15
+    }
+  },
+  "kg_build": {
+    "doc_id": "a894e1af",
+    "triples": 2815,
+    "entities": 3356,
+    "concepts": 2496,
+    "faiss_built": true,
+    "elapsed_s": 1963.4
+  },
+  "engines": {
+    "doc_id": "a894e1af",
+    "sector": "Rail Infrastructure",
+    "consistency": {
+      "doc_id": "a894e1af",
+      "sector": "Rail Infrastructure",
+      "total_issues": 14,
+      "by_severity": {
+        "CRITICAL": 1,
+        "HIGH": 10,
+        "MEDIUM": 3,
+        "LOW": 0
+      },
+      "by_type": {
+        "numeric_mismatch": 7,
+        "missing_dependency": 2,
+        "llm_flagged": 5
+      },
+      "issues": [
+        {
+          "id": "a01d0dbe-3c51-4ff3-b41b-b7754c5b4257",
+          "type": "numeric_mismatch",
+          "severity": "HIGH",
+          "description": "'project \u2192 total cost' has inconsistent values across pages: [5470.57, 4220.16, 303.26, 6.29, 8.63] (diff=100%)",
+          "pages": [
+            14,
+            16,
+            48,
+            49,
+            347,
+            349,
+            351,
+            493
+          ],
+          "evidence": "Values found: [5470.57, 4220.16, 303.26, 6.29, 8.63]"
+        },
+        {
+          "id": "c8185be4-8d03-4374-ac20-ba522b300d00",
+          "type": "numeric_mismatch",
+          "severity": "HIGH",
+          "description": "'track geometry \u2192 radius' has inconsistent values across pages: [3500.0, 4500.0, 1750.0, 875.0, 5000.0] (diff=85%)",
+          "pages": [
+            241,
+            242,
+            243,
+            244,
+            245
+          ],
+          "evidence": "Values found: [3500.0, 4500.0, 1750.0, 875.0, 5000.0]"
+        },
+        {
+          "id": "885794f5-77d0-49eb-b970-45e6511195fc",
+          "type": "numeric_mismatch",
+          "severity": "HIGH",
+          "description": "'track geometry \u2192 curvature' has inconsistent values across pages: [0.5, 0.39, 1.0, 2.0, 0.58] (diff=85%)",
+          "pages": [
+            241,
+            242
+          ],
+          "evidence": "Values found: [0.5, 0.389, 1.0, 2.0, 0.583]"
+        },
+        {
+          "id": "dee94347-d745-4085-9603-cfb436c2c876",
+          "type": "numeric_mismatch",
+          "severity": "HIGH",
+          "description": "'track geometry \u2192 max_speed' has inconsistent values across pages: [160.21, 160.27, 160.25, 160.24, 160.28] (diff=82%)",
+          "pages": [
+            241,
+            242
+          ],
+          "evidence": "Values found: [160.213, 160.27, 160.252, 160.235, 160.281]"
+        },
+        {
+          "id": "63a99fe7-491a-483d-9a37-d486e645c9de",
+          "type": "numeric_mismatch",
+          "severity": "HIGH",
+          "description": "'track geometry \u2192 length' has inconsistent values across pages: [248.1, 167.13, 168.33, 243.06, 318.64] (diff=80%)",
+          "pages": [
+            241,
+            243
+          ],
+          "evidence": "Values found: [248.105, 167.13, 168.326, 243.065, 318.645]"
+        },
+        {
+          "id": "b3db3ed3-3929-4795-9090-fdd8aafb66c0",
+          "type": "numeric_mismatch",
+          "severity": "HIGH",
+          "description": "'track geometry \u2192 gradient' has inconsistent values across pages: [0.04, 0.0, 0.13, 0.32, 0.02] (diff=100%)",
+          "pages": [
+            248,
+            250,
+            252
+          ],
+          "evidence": "Values found: [0.039, 0.0, 0.126, 0.318, 0.016]"
+        },
+        {
+          "id": "23ce9a20-1202-4caa-9414-52b88b0ba36b",
+          "type": "numeric_mismatch",
+          "severity": "MEDIUM",
+          "description": "'linear water-way \u2192 length' has inconsistent values across pages: [1892.52, 2281.03] (diff=17%)",
+          "pages": [
+            348,
+            466
+          ],
+          "evidence": "Values found: [1892.52, 2281.03]"
+        },
+        {
+          "id": "30ea90ce-3f64-4bff-87a9-f67be30d887c",
+          "type": "missing_dependency",
+          "severity": "HIGH",
+          "description": "'curve radius' is specified in the DPR but its prerequisite 'track speed limit' is not found.",
+          "pages": [
+            247
+          ],
+          "evidence": "Dependency: Curve radii are determined by the maximum allowable speeds on the track.. Expected check: if max speed = 130km/h then minimum curve radius >=583m"
+        },
+        {
+          "id": "2973cbab-d39f-4bac-b488-8022f3115a13",
+          "type": "missing_dependency",
+          "severity": "HIGH",
+          "description": "'maximum speed' is specified in the DPR but its prerequisite 'track curvature and gradient' is not found.",
+          "pages": [
+            12
+          ],
+          "evidence": "Dependency: Maximum speed depends on the degree of curvature and ruling gradient.. Expected check: if maximum speed = 130 km/h then track curvature <= 4 degrees and ruling gradient >= 1:250"
+        },
+        {
+          "id": "4d31755e-9488-45b4-a4a0-6fe902be1025",
+          "type": "llm_flagged",
+          "severity": "CRITICAL",
+          "description": "Total project cost discrepancy.",
+          "pages": [],
+          "evidence": "p11: project | current estimated cost = 5470.57 crore Rs., p14: project | total cost = 5470.57 crore Rs., but multiple instances in p16 with different values such as 303.26 crore Rs., 4220.16 crore Rs."
+        },
+        {
+          "id": "1ae0e0c7-fef1-4891-989d-379b78d8cd56",
+          "type": "llm_flagged",
+          "severity": "HIGH",
+          "description": "Inconsistent track center width.",
+          "pages": [],
+          "evidence": "p13: track center | width = 7.8 m, p13: track center | width = 5.3 m"
+        },
+        {
+          "id": "402c6c58-8195-4274-90e8-d3f3d390a226",
+          "type": "llm_flagged",
+          "severity": "MEDIUM",
+          "description": "Missing critical parameter for project completion period.",
+          "pages": [],
+          "evidence": "p11: project | completion period = 4 but no end date or start date provided to validate this period."
+        },
+        {
+          "id": "d69c3ba7-f36b-4bdd-8c69-73c0df7c6c15",
+          "type": "llm_flagged",
+          "severity": "HIGH",
+          "description": "Inconsistent total track length and route length.",
+          "pages": [],
+          "evidence": "p14: total track km. | length = 414620 m, p14: route length | length = 193600 m but no explanation for the difference in lengths which are expected to be similar if not identical."
+        },
+        {
+          "id": "f33c28f4-c7dd-420a-8d94-1d8efca734e0",
+          "type": "llm_flagged",
+          "severity": "MEDIUM",
+          "description": "Inconsistent earthwork volumes and unit costs.",
+          "pages": [],
+          "evidence": "p12: earthwork in embankment | volume = 3.83123e+06 m\u00b3, p15: earthwork in embankment | quantity = 3.83123e+06 m\u00b3 but p15: earthwork in embankment | unit cost = 370.87 Rs., which seems unusually low for such a large volume."
+        }
+      ]
+    },
+    "anomaly": {
+      "doc_id": "a894e1af",
+      "sector": "Rail Infrastructure",
+      "total_flags": 64,
+      "by_type": {
+        "statistical_outlier": 27,
+        "oom_error": 31,
+        "duplicate_values": 0,
+        "unit_mismatch": 1,
+        "llm_flagged": 5
+      },
+      "by_severity": {
+        "CRITICAL": 0,
+        "HIGH": 37,
+        "MEDIUM": 25,
+        "LOW": 2
+      },
+      "flags": [
+        {
+          "id": "4e078527-dffb-4dde-8d35-fda3a0c8bf43",
+          "type": "statistical_outlier",
+          "severity": "HIGH",
+          "description": "'total cost' value 547057.0 crore Rs. is a statistical outlier (z=5.3, mean=19485.77, \u03c3=99666.03)",
+          "attribute": "total cost",
+          "flagged_value": "547057.0",
+          "expected_range": "-179846.29 \u2013 218817.82"
+        },
+        {
+          "id": "0e4475eb-5431-4956-a163-8e3c88a2b92e",
+          "type": "statistical_outlier",
+          "severity": "HIGH",
+          "description": "'length' value 690000.0 m is a statistical outlier (z=4.8, mean=62926.20, \u03c3=129316.50)",
+          "attribute": "length",
+          "flagged_value": "690000.0",
+          "expected_range": "-195706.79 \u2013 321559.19"
+        },
+        {
+          "id": "5edd324c-270a-4e05-80cd-f08a66e1ece6",
+          "type": "statistical_outlier",
+          "severity": "HIGH",
+          "description": "'area' value 857000.0 m\u00b2 is a statistical outlier (z=5.4, mean=42350.72, \u03c3=149514.04)",
+          "attribute": "area",
+          "flagged_value": "857000.0",
+          "expected_range": "-256677.36 \u2013 341378.80"
+        },
+        {
+          "id": "e2a96801-fbfc-420c-a844-998d2d0851b9",
+          "type": "statistical_outlier",
+          "severity": "MEDIUM",
+          "description": "'quantity' value 837894.0 m\u00b3 is a statistical outlier (z=3.7, mean=90032.49, \u03c3=204159.95)",
+          "attribute": "quantity",
+          "flagged_value": "837894.0",
+          "expected_range": "-318287.42 \u2013 498352.39"
+        },
+        {
+          "id": "41b5b1c2-12a1-4844-b94c-a840484967de",
+          "type": "statistical_outlier",
+          "severity": "MEDIUM",
+          "description": "'quantity' value 837894.0 m\u00b3 is a statistical outlier (z=3.7, mean=90032.49, \u03c3=204159.95)",
+          "attribute": "quantity",
+          "flagged_value": "837894.0",
+          "expected_range": "-318287.42 \u2013 498352.39"
+        },
+        {
+          "id": "b6c42ca5-2bd1-49cd-a2eb-e5eabdc42479",
+          "type": "statistical_outlier",
+          "severity": "MEDIUM",
+          "description": "'radius' value 875.0 m is a statistical outlier (z=3.2, mean=3379.40, \u03c3=786.59)",
+          "attribute": "radius",
+          "flagged_value": "875.0",
+          "expected_range": "1806.22 \u2013 4952.57"
+        },
+        {
+          "id": "f1227c56-c8da-4864-a02d-c6e028a7400c",
+          "type": "statistical_outlier",
+          "severity": "MEDIUM",
+          "description": "'radius' value 6000.0 m is a statistical outlier (z=3.3, mean=3379.40, \u03c3=786.59)",
+          "attribute": "radius",
+          "flagged_value": "6000.0",
+          "expected_range": "1806.22 \u2013 4952.57"
+        },
+        {
+          "id": "6398b5ac-d158-4439-8a00-25d54c3280c1",
+          "type": "statistical_outlier",
+          "severity": "MEDIUM",
+          "description": "'radius' value 875.0 m is a statistical outlier (z=3.2, mean=3379.40, \u03c3=786.59)",
+          "attribute": "radius",
+          "flagged_value": "875.0",
+          "expected_range": "1806.22 \u2013 4952.57"
+        },
+        {
+          "id": "19d35464-1742-4f58-92f0-5b4cc2ed93c3",
+          "type": "statistical_outlier",
+          "severity": "MEDIUM",
+          "description": "'radius' value 1000.0 m is a statistical outlier (z=3.0, mean=3379.40, \u03c3=786.59)",
+          "attribute": "radius",
+          "flagged_value": "1000.0",
+          "expected_range": "1806.22 \u2013 4952.57"
+        },
+        {
+          "id": "4b94e1e6-0251-4fa8-b38c-f7555fcca85c",
+          "type": "statistical_outlier",
+          "severity": "MEDIUM",
+          "description": "'radius' value 6000.0 m is a statistical outlier (z=3.3, mean=3379.40, \u03c3=786.59)",
+          "attribute": "radius",
+          "flagged_value": "6000.0",
+          "expected_range": "1806.22 \u2013 4952.57"
+        },
+        {
+          "id": "ecf63b9c-dae8-462a-8d4f-21f5964efece",
+          "type": "statistical_outlier",
+          "severity": "MEDIUM",
+          "description": "'radius' value 950.0 m is a statistical outlier (z=3.1, mean=3379.40, \u03c3=786.59)",
+          "attribute": "radius",
+          "flagged_value": "950.0",
+          "expected_range": "1806.22 \u2013 4952.57"
+        },
+        {
+          "id": "4573f970-1e86-4bd5-9d47-e15ceaa797be",
+          "type": "statistical_outlier",
+          "severity": "MEDIUM",
+          "description": "'radius' value 6000.0 m is a statistical outlier (z=3.3, mean=3379.40, \u03c3=786.59)",
+          "attribute": "radius",
+          "flagged_value": "6000.0",
+          "expected_range": "1806.22 \u2013 4952.57"
+        },
+        {
+          "id": "3563ecab-edfb-4867-9080-87b977e879eb",
+          "type": "statistical_outlier",
+          "severity": "MEDIUM",
+          "description": "'radius' value 875.0 m is a statistical outlier (z=3.2, mean=3379.40, \u03c3=786.59)",
+          "attribute": "radius",
+          "flagged_value": "875.0",
+          "expected_range": "1806.22 \u2013 4952.57"
+        },
+        {
+          "id": "6e95b4a5-959b-4b52-9bc4-863b67102921",
+          "type": "statistical_outlier",
+          "severity": "MEDIUM",
+          "description": "'radius' value 6000.0 m is a statistical outlier (z=3.3, mean=3379.40, \u03c3=786.59)",
+          "attribute": "radius",
+          "flagged_value": "6000.0",
+          "expected_range": "1806.22 \u2013 4952.57"
+        },
+        {
+          "id": "5addbb2a-109e-4346-b88c-30e91ca5d6fb",
+          "type": "statistical_outlier",
+          "severity": "MEDIUM",
+          "description": "'radius' value 875.0 m is a statistical outlier (z=3.2, mean=3379.40, \u03c3=786.59)",
+          "attribute": "radius",
+          "flagged_value": "875.0",
+          "expected_range": "1806.22 \u2013 4952.57"
+        },
+        {
+          "id": "cf18a71b-1a31-4b5d-9d24-b64c3ef93685",
+          "type": "statistical_outlier",
+          "severity": "MEDIUM",
+          "description": "'max_speed' value 160.213 km/h is a statistical outlier (z=3.0, mean=94.92, \u03c3=21.48)",
+          "attribute": "max_speed",
+          "flagged_value": "160.213",
+          "expected_range": "51.96 \u2013 137.89"
+        },
+        {
+          "id": "2cdffd87-6ca1-4f75-8314-743f9d81636a",
+          "type": "statistical_outlier",
+          "severity": "MEDIUM",
+          "description": "'max_speed' value 160.27 km/h is a statistical outlier (z=3.0, mean=94.92, \u03c3=21.48)",
+          "attribute": "max_speed",
+          "flagged_value": "160.27",
+          "expected_range": "51.96 \u2013 137.89"
+        },
+        {
+          "id": "0c2fa088-9130-4226-b205-7356038351be",
+          "type": "statistical_outlier",
+          "severity": "MEDIUM",
+          "description": "'max_speed' value 160.252 km/h is a statistical outlier (z=3.0, mean=94.92, \u03c3=21.48)",
+          "attribute": "max_speed",
+          "flagged_value": "160.252",
+          "expected_range": "51.96 \u2013 137.89"
+        },
+        {
+          "id": "9b099995-a060-424c-8f71-4e50258b349f",
+          "type": "statistical_outlier",
+          "severity": "MEDIUM",
+          "description": "'max_speed' value 160.235 km/h is a statistical outlier (z=3.0, mean=94.92, \u03c3=21.48)",
+          "attribute": "max_speed",
+          "flagged_value": "160.235",
+          "expected_range": "51.96 \u2013 137.89"
+        },
+        {
+          "id": "1027beb5-9675-4326-bc61-8ff01853dba9",
+          "type": "statistical_outlier",
+          "severity": "MEDIUM",
+          "description": "'max_speed' value 160.281 km/h is a statistical outlier (z=3.0, mean=94.92, \u03c3=21.48)",
+          "attribute": "max_speed",
+          "flagged_value": "160.281",
+          "expected_range": "51.96 \u2013 137.89"
+        },
+        {
+          "id": "c48f135e-1b37-40b1-8a6f-57bc5b0162ec",
+          "type": "statistical_outlier",
+          "severity": "MEDIUM",
+          "description": "'max_speed' value 28.7  is a statistical outlier (z=3.1, mean=94.92, \u03c3=21.48)",
+          "attribute": "max_speed",
+          "flagged_value": "28.7",
+          "expected_range": "51.96 \u2013 137.89"
+        },
+        {
+          "id": "2d85e1e7-ac08-412b-aa2a-300379958118",
+          "type": "statistical_outlier",
+          "severity": "MEDIUM",
+          "description": "'gradient' value 11419.0  is a statistical outlier (z=4.2, mean=699.52, \u03c3=2547.44)",
+          "attribute": "gradient",
+          "flagged_value": "11419.0",
+          "expected_range": "-4395.37 \u2013 5794.40"
+        },
+        {
+          "id": "1a31d32f-b1a1-4ecc-ad7c-b12869ddcd0f",
+          "type": "statistical_outlier",
+          "severity": "MEDIUM",
+          "description": "'gradient' value 11567.0  is a statistical outlier (z=4.3, mean=699.52, \u03c3=2547.44)",
+          "attribute": "gradient",
+          "flagged_value": "11567.0",
+          "expected_range": "-4395.37 \u2013 5794.40"
+        },
+        {
+          "id": "1a9c6936-a428-4da0-9585-1ad39f1e1e8c",
+          "type": "statistical_outlier",
+          "severity": "HIGH",
+          "description": "'gradient' value 13681.0  is a statistical outlier (z=5.1, mean=699.52, \u03c3=2547.44)",
+          "attribute": "gradient",
+          "flagged_value": "13681.0",
+          "expected_range": "-4395.37 \u2013 5794.40"
+        },
+        {
+          "id": "9c0ded06-2363-432c-8539-0984fd94c932",
+          "type": "statistical_outlier",
+          "severity": "MEDIUM",
+          "description": "'gradient' value 11087.0  is a statistical outlier (z=4.1, mean=699.52, \u03c3=2547.44)",
+          "attribute": "gradient",
+          "flagged_value": "11087.0",
+          "expected_range": "-4395.37 \u2013 5794.40"
+        },
+        {
+          "id": "09dc851c-1add-4049-a955-4ba44b82eaf3",
+          "type": "statistical_outlier",
+          "severity": "MEDIUM",
+          "description": "'gradient' value 11189.0  is a statistical outlier (z=4.1, mean=699.52, \u03c3=2547.44)",
+          "attribute": "gradient",
+          "flagged_value": "11189.0",
+          "expected_range": "-4395.37 \u2013 5794.40"
+        },
+        {
+          "id": "76bf9d72-ef5a-447a-af1c-e5804d74d3b0",
+          "type": "statistical_outlier",
+          "severity": "HIGH",
+          "description": "'gradient' value 12300.0  is a statistical outlier (z=4.6, mean=699.52, \u03c3=2547.44)",
+          "attribute": "gradient",
+          "flagged_value": "12300.0",
+          "expected_range": "-4395.37 \u2013 5794.40"
+        },
+        {
+          "id": "588fd2b8-62d6-4cfe-b704-960618689f6d",
+          "type": "oom_error",
+          "severity": "HIGH",
+          "description": "'ruling gradient' value 1200.0  appears to be an order-of-magnitude error. Expected range: 0.1\u201310 %. Possible decimal placement mistake?",
+          "attribute": "ruling gradient",
+          "flagged_value": "1200.0",
+          "expected_range": "0.1\u201310 %"
+        },
+        {
+          "id": "98119f35-2b8f-4496-80a5-8139a32c7148",
+          "type": "oom_error",
+          "severity": "HIGH",
+          "description": "'length on ruling gradient' value 3440.0 m appears to be an order-of-magnitude error. Expected range: 0.1\u201310 %. Possible decimal placement mistake?",
+          "attribute": "length on ruling gradient",
+          "flagged_value": "3440.0",
+          "expected_range": "0.1\u201310 %"
+        },
+        {
+          "id": "9fa39e3f-696e-4a1d-91d4-efd518f463e3",
+          "type": "oom_error",
+          "severity": "HIGH",
+          "description": "'ruling gradient' value 1200.0  appears to be an order-of-magnitude error. Expected range: 0.1\u201310 %. Possible decimal placement mistake?",
+          "attribute": "ruling gradient",
+          "flagged_value": "1200.0",
+          "expected_range": "0.1\u201310 %"
+        },
+        {
+          "id": "2c920f4c-1dc7-4e8d-87c3-2750c9f6b790",
+          "type": "oom_error",
+          "severity": "HIGH",
+          "description": "'length on ruling gradient' value 3440.0 m appears to be an order-of-magnitude error. Expected range: 0.1\u201310 %. Possible decimal placement mistake?",
+          "attribute": "length on ruling gradient",
+          "flagged_value": "3440.0",
+          "expected_range": "0.1\u201310 %"
+        },
+        {
+          "id": "b367c82e-b796-48f0-a387-9104d939fe3c",
+          "type": "oom_error",
+          "severity": "HIGH",
+          "description": "'length of rising gradient' value 79490.0 m appears to be an order-of-magnitude error. Expected range: 0.1\u201310 %. Possible decimal placement mistake?",
+          "attribute": "length of rising gradient",
+          "flagged_value": "79490.0",
+          "expected_range": "0.1\u201310 %"
+        },
+        {
+          "id": "1b9942c3-4617-4cb9-8310-ccd09ee58c8c",
+          "type": "oom_error",
+          "severity": "HIGH",
+          "description": "'length of falling gradient' value 39830.0 m appears to be an order-of-magnitude error. Expected range: 0.1\u201310 %. Possible decimal placement mistake?",
+          "attribute": "length of falling gradient",
+          "flagged_value": "39830.0",
+          "expected_range": "0.1\u201310 %"
+        },
+        {
+          "id": "c21423d1-c7b8-4466-8462-bd246608a8c6",
+          "type": "oom_error",
+          "severity": "HIGH",
+          "description": "'length of level gradient' value 79490.0 m appears to be an order-of-magnitude error. Expected range: 0.1\u201310 %. Possible decimal placement mistake?",
+          "attribute": "length of level gradient",
+          "flagged_value": "79490.0",
+          "expected_range": "0.1\u201310 %"
+        },
+        {
+          "id": "be498f77-eb6d-40f6-b3ee-24c87eb57b91",
+          "type": "oom_error",
+          "severity": "HIGH",
+          "description": "'maximum_gradient_length' value 4000.0 m appears to be an order-of-magnitude error. Expected range: 0.1\u201310 %. Possible decimal placement mistake?",
+          "attribute": "maximum_gradient_length",
+          "flagged_value": "4000.0",
+          "expected_range": "0.1\u201310 %"
+        },
+        {
+          "id": "c1a0617c-5a0b-4751-ad5b-4cd09cf7e50f",
+          "type": "oom_error",
+          "severity": "HIGH",
+          "description": "'maximum gradient' value 1400.0  appears to be an order-of-magnitude error. Expected range: 0.1\u201310 %. Possible decimal placement mistake?",
+          "attribute": "maximum gradient",
+          "flagged_value": "1400.0",
+          "expected_range": "0.1\u201310 %"
+        },
+        {
+          "id": "dc06e10b-2d35-42a5-a587-ee162be915e5",
+          "type": "oom_error",
+          "severity": "HIGH",
+          "description": "'recommended gradient' value 11200.0  appears to be an order-of-magnitude error. Expected range: 0.1\u201310 %. Possible decimal placement mistake?",
+          "attribute": "recommended gradient",
+          "flagged_value": "11200.0",
+          "expected_range": "0.1\u201310 %"
+        },
+        {
+          "id": "d2bc347e-ea44-40b6-8fc4-abe3c4348aef",
+          "type": "oom_error",
+          "severity": "HIGH",
+          "description": "'super structure standard spans' value -28.0  appears to be an order-of-magnitude error. Expected range: 1\u2013300 m. Possible decimal placement mistake?",
+          "attribute": "super structure standard spans",
+          "flagged_value": "-28.0",
+          "expected_range": "1\u2013300 m"
+        },
+        {
+          "id": "afc5f2d9-d1d6-4acd-ad32-5577f7ad37d8",
+          "type": "oom_error",
+          "severity": "HIGH",
+          "description": "'gradient' value 11419.0  appears to be an order-of-magnitude error. Expected range: 0.1\u201310 %. Possible decimal placement mistake?",
+          "attribute": "gradient",
+          "flagged_value": "11419.0",
+          "expected_range": "0.1\u201310 %"
+        },
+        {
+          "id": "7174136a-e3c9-41b9-8ca3-e773020eeff5",
+          "type": "oom_error",
+          "severity": "HIGH",
+          "description": "'gradient' value 11567.0  appears to be an order-of-magnitude error. Expected range: 0.1\u201310 %. Possible decimal placement mistake?",
+          "attribute": "gradient",
+          "flagged_value": "11567.0",
+          "expected_range": "0.1\u201310 %"
+        },
+        {
+          "id": "061dd622-3dae-46df-80ab-62a5a6705242",
+          "type": "oom_error",
+          "severity": "HIGH",
+          "description": "'gradient' value 1887.0  appears to be an order-of-magnitude error. Expected range: 0.1\u201310 %. Possible decimal placement mistake?",
+          "attribute": "gradient",
+          "flagged_value": "1887.0",
+          "expected_range": "0.1\u201310 %"
+        },
+        {
+          "id": "bffcbef7-9d3e-4d01-8b54-9071ad066c5d",
+          "type": "oom_error",
+          "severity": "HIGH",
+          "description": "'gradient' value 1265.0  appears to be an order-of-magnitude error. Expected range: 0.1\u201310 %. Possible decimal placement mistake?",
+          "attribute": "gradient",
+          "flagged_value": "1265.0",
+          "expected_range": "0.1\u201310 %"
+        },
+        {
+          "id": "93f87e7f-350d-46a5-85ed-78ae14d04c18",
+          "type": "oom_error",
+          "severity": "HIGH",
+          "description": "'gradient' value 1992.0  appears to be an order-of-magnitude error. Expected range: 0.1\u201310 %. Possible decimal placement mistake?",
+          "attribute": "gradient",
+          "flagged_value": "1992.0",
+          "expected_range": "0.1\u201310 %"
+        },
+        {
+          "id": "501268aa-9f02-47ca-b4f8-dc48e6b832a7",
+          "type": "oom_error",
+          "severity": "HIGH",
+          "description": "'gradient' value 13681.0  appears to be an order-of-magnitude error. Expected range: 0.1\u201310 %. Possible decimal placement mistake?",
+          "attribute": "gradient",
+          "flagged_value": "13681.0",
+          "expected_range": "0.1\u201310 %"
+        },
+        {
+          "id": "69b8d4f9-ae4a-4cda-9a7d-125153ecbc1d",
+          "type": "oom_error",
+          "severity": "HIGH",
+          "description": "'gradient' value 1513.0  appears to be an order-of-magnitude error. Expected range: 0.1\u201310 %. Possible decimal placement mistake?",
+          "attribute": "gradient",
+          "flagged_value": "1513.0",
+          "expected_range": "0.1\u201310 %"
+        },
+        {
+          "id": "2e1ba9d9-c857-42ca-a80b-349d504ea444",
+          "type": "oom_error",
+          "severity": "HIGH",
+          "description": "'gradient' value 1316.0  appears to be an order-of-magnitude error. Expected range: 0.1\u201310 %. Possible decimal placement mistake?",
+          "attribute": "gradient",
+          "flagged_value": "1316.0",
+          "expected_range": "0.1\u201310 %"
+        },
+        {
+          "id": "447da6b6-a414-4dc2-9182-b887261bae7a",
+          "type": "oom_error",
+          "severity": "HIGH",
+          "description": "'gradient' value 1221.0  appears to be an order-of-magnitude error. Expected range: 0.1\u201310 %. Possible decimal placement mistake?",
+          "attribute": "gradient",
+          "flagged_value": "1221.0",
+          "expected_range": "0.1\u201310 %"
+        },
+        {
+          "id": "38370106-3e2f-429b-9fd0-e765539fce4e",
+          "type": "oom_error",
+          "severity": "HIGH",
+          "description": "'gradient' value 1944.0  appears to be an order-of-magnitude error. Expected range: 0.1\u201310 %. Possible decimal placement mistake?",
+          "attribute": "gradient",
+          "flagged_value": "1944.0",
+          "expected_range": "0.1\u201310 %"
+        },
+        {
+          "id": "f76ab6d1-f088-4cb1-a962-5e3675dcc670",
+          "type": "oom_error",
+          "severity": "HIGH",
+          "description": "'gradient' value 11087.0  appears to be an order-of-magnitude error. Expected range: 0.1\u201310 %. Possible decimal placement mistake?",
+          "attribute": "gradient",
+          "flagged_value": "11087.0",
+          "expected_range": "0.1\u201310 %"
+        },
+        {
+          "id": "0f67912d-b129-4769-911a-c78499b46426",
+          "type": "oom_error",
+          "severity": "HIGH",
+          "description": "'gradient' value 1867.0  appears to be an order-of-magnitude error. Expected range: 0.1\u201310 %. Possible decimal placement mistake?",
+          "attribute": "gradient",
+          "flagged_value": "1867.0",
+          "expected_range": "0.1\u201310 %"
+        },
+        {
+          "id": "8408a2c8-50c2-4dd5-8494-a95f46c82e49",
+          "type": "oom_error",
+          "severity": "HIGH",
+          "description": "'gradient' value 11189.0  appears to be an order-of-magnitude error. Expected range: 0.1\u201310 %. Possible decimal placement mistake?",
+          "attribute": "gradient",
+          "flagged_value": "11189.0",
+          "expected_range": "0.1\u201310 %"
+        },
+        {
+          "id": "69007455-05af-4d16-a515-d0034d239f49",
+          "type": "oom_error",
+          "severity": "HIGH",
+          "description": "'gradient' value 1298.0  appears to be an order-of-magnitude error. Expected range: 0.1\u201310 %. Possible decimal placement mistake?",
+          "attribute": "gradient",
+          "flagged_value": "1298.0",
+          "expected_range": "0.1\u201310 %"
+        },
+        {
+          "id": "78804d15-257f-4119-8198-3186c51a158b",
+          "type": "oom_error",
+          "severity": "HIGH",
+          "description": "'gradient' value 1443.0  appears to be an order-of-magnitude error. Expected range: 0.1\u201310 %. Possible decimal placement mistake?",
+          "attribute": "gradient",
+          "flagged_value": "1443.0",
+          "expected_range": "0.1\u201310 %"
+        },
+        {
+          "id": "83d978b1-d86d-46d8-9317-d626a7a69c53",
+          "type": "oom_error",
+          "severity": "HIGH",
+          "description": "'gradient' value 12300.0  appears to be an order-of-magnitude error. Expected range: 0.1\u201310 %. Possible decimal placement mistake?",
+          "attribute": "gradient",
+          "flagged_value": "12300.0",
+          "expected_range": "0.1\u201310 %"
+        },
+        {
+          "id": "a06e6007-ccc3-4f0a-a3ea-0574a7799d04",
+          "type": "oom_error",
+          "severity": "HIGH",
+          "description": "'gradient' value 1838.0  appears to be an order-of-magnitude error. Expected range: 0.1\u201310 %. Possible decimal placement mistake?",
+          "attribute": "gradient",
+          "flagged_value": "1838.0",
+          "expected_range": "0.1\u201310 %"
+        },
+        {
+          "id": "a52254dc-b5db-4fb8-9dc2-78eb2a7c3fc9",
+          "type": "oom_error",
+          "severity": "HIGH",
+          "description": "'gradient length flatter than 1 in 200' value 33090.0 m appears to be an order-of-magnitude error. Expected range: 0.1\u201310 %. Possible decimal placement mistake?",
+          "attribute": "gradient length flatter than 1 in 200",
+          "flagged_value": "33090.0",
+          "expected_range": "0.1\u201310 %"
+        },
+        {
+          "id": "823ca47c-1ee2-44c0-bc12-510fe18c7b33",
+          "type": "oom_error",
+          "severity": "HIGH",
+          "description": "'gradient recommended for yards' value 11200.0  appears to be an order-of-magnitude error. Expected range: 0.1\u201310 %. Possible decimal placement mistake?",
+          "attribute": "gradient recommended for yards",
+          "flagged_value": "11200.0",
+          "expected_range": "0.1\u201310 %"
+        },
+        {
+          "id": "3d00a6a0-33db-476d-9dac-961a6166a603",
+          "type": "oom_error",
+          "severity": "HIGH",
+          "description": "'gradient alternative for yards' value 1400.0  appears to be an order-of-magnitude error. Expected range: 0.1\u201310 %. Possible decimal placement mistake?",
+          "attribute": "gradient alternative for yards",
+          "flagged_value": "1400.0",
+          "expected_range": "0.1\u201310 %"
+        },
+        {
+          "id": "0acc9ba4-8b74-4ee3-afd8-ee71e40ee49b",
+          "type": "unit_mismatch",
+          "severity": "MEDIUM",
+          "description": "'depth' uses mixed units: {'m', 'mm'}. Verify all values are on the same scale.",
+          "attribute": "depth",
+          "flagged_value": "{'m', 'mm'}",
+          "expected_range": ""
+        },
+        {
+          "id": "88fa0b40-8d68-4ef6-b732-d732dcc3c457",
+          "type": "llm_flagged",
+          "severity": "HIGH",
+          "description": "Axle loading is unusually low.",
+          "attribute": "axle loading",
+          "flagged_value": "25-T",
+          "expected_range": "Typical axle loads for modern rail systems are much higher, often ranging from 27 to 30 tons or more. A value of 25T seems unusually low and may indicate a mistake in reporting."
+        },
+        {
+          "id": "cae07014-8bdf-42aa-966f-c30443b556a7",
+          "type": "llm_flagged",
+          "severity": "MEDIUM",
+          "description": "Track center width varies significantly between measurements.",
+          "attribute": "width",
+          "flagged_value": "[7.8 m, 5.3 m]",
+          "expected_range": "The track center width should be consistent across the entire rail system unless there are specific reasons documented for variations which are not provided here. A difference of over two meters is highly unusual and may indicate an error."
+        },
+        {
+          "id": "791d9d69-fa0c-4bed-8763-4ccfc658614a",
+          "type": "llm_flagged",
+          "severity": "MEDIUM",
+          "description": "Volume of earthwork in embankment seems excessively high relative to cutting volume.",
+          "attribute": "volume",
+          "flagged_value": "[3.83123e+06 m\u00b3, 837894 m\u00b3]",
+          "expected_range": "The ratio between the volume of earthwork in embankment and cutting is disproportionately large (about 4.5:1). This suggests either an extremely uneven terrain or a significant error in measurement."
+        },
+        {
+          "id": "4745b8b0-048c-4f70-a278-c6f7f19a9c13",
+          "type": "llm_flagged",
+          "severity": "LOW",
+          "description": "Unit cost for blanketing quantity seems unrealistically high.",
+          "attribute": "unit cost",
+          "flagged_value": "2851.18 Rs.",
+          "expected_range": "The unit cost of 2851.18 Rs per cubic meter for blanketing is unusually high compared to typical costs for similar materials and processes in railway construction, suggesting a possible error or misreporting."
+        },
+        {
+          "id": "d23af272-8056-4dc1-acc5-ccd67745910d",
+          "type": "llm_flagged",
+          "severity": "LOW",
+          "description": "Unit cost for fencing (station/lc etc.) seems unrealistically low.",
+          "attribute": "unit cost",
+          "flagged_value": "0.0003253 Cr.",
+          "expected_range": "The unit cost of 0.0003253 crore Rs per meter for fencing is extremely low, suggesting a possible error or misreporting as typical costs would be significantly higher."
+        }
+      ]
+    }
+  }
+}

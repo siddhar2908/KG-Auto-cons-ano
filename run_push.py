@@ -145,6 +145,19 @@ _UNIT_CANON = [
     # Currency
     (re.compile(r"^Rs\.?$",       re.I), "Rs."),
     (re.compile(r"^INR$",         re.I), "Rs."),
+    # Volume variants → m³
+    (re.compile(r"^Cu\.?m$",      re.I), "m³"),
+    (re.compile(r"^Cum$",         re.I), "m³"),
+    (re.compile(r"^cu\.?m$",      re.I), "m³"),
+    # Area variants → m²
+    (re.compile(r"^Sq\.?m\.?$",   re.I), "m²"),
+    (re.compile(r"^Sqm\.?$",      re.I), "m²"),
+    (re.compile(r"^sq\.m$",       re.I), "m²"),
+    # Case variants
+    (re.compile(r"^Km$"),                "km"),
+    (re.compile(r"^Ha$"),                "ha"),
+    (re.compile(r"^Nos?\.?$",     re.I), "nos"),
+    (re.compile(r"^Hrs?\.?$",     re.I), "hr"),
 ]
 
 def _canonicalize_unit(unit: str) -> str:
@@ -239,8 +252,21 @@ def filter_facts(facts: list[dict], min_confidence: float) -> tuple[list[dict], 
     return kept, dict(stats)
 
 
+def _is_null_value(v) -> bool:
+    """Check if a table cell value is effectively null/empty/NaN."""
+    if v is None:
+        return True
+    s = str(v).strip()
+    return s in ("", "None", "NaN", "nan", "NULL", "null", "-", "N/A", "n/a")
+
+
 def filter_table_rows(tables: dict) -> tuple[dict, int]:
-    """Remove table rows that are pure headers (all values match keys)."""
+    """
+    Remove table rows that are:
+    - Pure headers (all values equal their keys)
+    - All-null/NaN rows (carry no engineering information)
+    - Rows where >80% of values are null (near-empty rows from merged cells)
+    """
     cleaned = {}
     removed = 0
     for page, rows in tables.items():
@@ -248,16 +274,27 @@ def filter_table_rows(tables: dict) -> tuple[dict, int]:
         for row in rows:
             if not row:
                 continue
-            # Row is a header if all values equal their keys (common in badly parsed tables)
-            vals = [str(v).strip() for v in row.values() if v is not None]
-            keys = [str(k).strip() for k in row.keys()]
-            if vals == keys:
+            vals = list(row.values())
+            keys = list(row.keys())
+
+            # Skip header rows (all values equal their keys)
+            str_vals = [str(v).strip() for v in vals if not _is_null_value(v)]
+            str_keys = [str(k).strip() for k in keys]
+            if str_vals == str_keys:
                 removed += 1
                 continue
-            # Row is empty
-            if all(v is None or str(v).strip() == "" for v in row.values()):
+
+            # Skip rows where all values are null/NaN
+            if all(_is_null_value(v) for v in vals):
                 removed += 1
                 continue
+
+            # Skip rows where >80% of values are null (merged cell artifacts)
+            null_count = sum(1 for v in vals if _is_null_value(v))
+            if len(vals) > 0 and null_count / len(vals) > 0.8:
+                removed += 1
+                continue
+
             good_rows.append(row)
         if good_rows:
             cleaned[page] = good_rows
@@ -377,7 +414,14 @@ def push_table_facts(tables: dict, doc_id: str, sector: str, dry_run: bool) -> i
     pushed = 0
     for page_str, rows in tables.items():
         for i, row in enumerate(rows):
-            fact_id = str(uuid.uuid4())
+            # Deterministic fact_id based on content — prevents duplicates on re-run
+            # Using page + row_index + doc_id means same row always gets same ID
+            import hashlib
+            row_json = json.dumps(row, sort_keys=True)
+            fact_id = "tr_" + hashlib.md5(
+                f"{doc_id}_{page_str}_{i}_{row_json}".encode()
+            ).hexdigest()[:16]
+
             run_write(
                 f"""
                 MATCH (d:{NodeLabel.DOCUMENT} {{doc_id: $doc_id}})
@@ -397,7 +441,7 @@ def push_table_facts(tables: dict, doc_id: str, sector: str, dry_run: bool) -> i
                 {
                     "doc_id":   doc_id,
                     "fact_id":  fact_id,
-                    "row_json": json.dumps(row),
+                    "row_json": row_json,
                     "page":     int(page_str),
                     "idx":      i,
                     "sector":   sector,

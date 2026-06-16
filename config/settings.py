@@ -36,7 +36,7 @@ for _d in [DPR_INPUT_DIR, RULEBOOKS_INPUT_DIR, PROCESSED_DIR, OUTPUT_DIR]:
 # These apply when running python run_extraction.py with no flags.
 # Override per-run with --start-page / --max-pages flags if needed.
 
-DPR_START_PAGE  = 16    # Skip cover page + TOC (usually pages 1-20)
+DPR_START_PAGE  = 8   # Skip cover page + TOC (usually pages 1-20)
                         # Set to 1 to process from the very first page
 
 DPR_MAX_PAGES   = None  # None = process entire document from DPR_START_PAGE
@@ -46,7 +46,7 @@ DPR_MAX_PAGES   = None  # None = process entire document from DPR_START_PAGE
 RULEBOOK_START_PAGE = 1    # Rulebooks don't have TOC pages to skip
 RULEBOOK_MAX_PAGES  = None # None = process entire rulebook
 
-EXTRACTION_WORKERS  = 4    # Parallel workers for page extraction
+EXTRACTION_WORKERS  = 6    # Parallel workers for page extraction
                            # Increase to 6-8 on powerful machines
                            # Decrease to 2 if Ollama becomes unstable
 
@@ -177,6 +177,8 @@ class NodeLabel:
 class RelType:
     HAS_FACT      = "HAS_FACT"
     HAS_RULE      = "HAS_RULE"
+    HAS_ENTITY    = "HAS_ENTITY"   # Document → Entity (KG builder)
+    TRIPLE        = "TRIPLE"       # Entity → Entity (KG triples)
     BELONGS_TO    = "BELONGS_TO"
     DEPENDS_ON    = "DEPENDS_ON"
     COMPLIES_WITH = "COMPLIES_WITH"

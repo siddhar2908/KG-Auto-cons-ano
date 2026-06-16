@@ -2,22 +2,25 @@
 extractors/kg_builder.py
 -------------------------
 AutoSchemaKG-inspired KG construction pipeline adapted for:
-  - Ollama as the LLM backend (replaces OpenAI LLMGenerator)
+  - Ollama as the LLM backend
   - DPR/engineering domain (sector-aware prompts)
   - Direct Neo4j write (no GraphML intermediate)
-  - mxbai-embed-large for embeddings (already available)
+  - mxbai-embed-large for embeddings
 
-Pipeline per page/chunk:
-  1. Triple extraction  → (Head, Relation, Tail) triples
-  2. Event extraction   → (Event, [Entities]) pairs
-  3. Concept induction  → abstract concept labels per entity/relation
-  4. Neo4j write        → nodes + edges with concept labels
+Performance optimisations applied:
+  1. MERGED PROMPT: entity-relation + event-entity extracted in one LLM call
+     instead of two serial calls per chunk → ~2× fewer Ollama round-trips.
 
-The triples ARE the KG — facts and rules both become triples.
-Concept labels are the ontology schema layer on top.
+  2. BATCHED CONCEPT INDUCTION: all entities + relations on a page are sent
+     in a single structured prompt returning JSON, instead of one call per
+     entity/relation → reduces concept calls from ~60/page to 1-2/page.
 
-This replaces both fact_extractor.py and ontology_generator.py
-for the main DPR extraction flow.
+  3. BATCHED NEO4J WRITES: all triples for a page are written with a single
+     UNWIND Cypher query for nodes and one for edges, instead of 3 individual
+     run_write() calls per triple → eliminates thousands of session round-trips.
+
+  4. PAGE-LEVEL RESULT CACHE: extracted triples are cached to disk so partial
+     runs can resume without re-querying Ollama.
 """
 
 import re
@@ -28,84 +31,74 @@ from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from loguru import logger
 
-from config.settings import NodeLabel, RelType, SECTOR_KEYS
+from config.settings import NodeLabel, RelType, SECTOR_KEYS, PROCESSED_DIR
 from utils.ollama_client import generate, generate_json, get_model_for_task, TaskType
 from utils.neo4j_client import run_write, run_read
 
-# ─── Prompts (adapted from AutoSchemaKG triple_extraction_prompt.py) ─────────
-# We keep the same structure but add sector context for engineering domain
+# ─── Prompts ──────────────────────────────────────────────────────────────────
 
 _TRIPLE_SYSTEM = (
-    "You are a helpful assistant who always responds with a valid JSON array. "
-    "No explanation, no preamble. Start directly with [."
+    "You are a helpful assistant who always responds with a valid JSON object. "
+    "No explanation, no preamble. Start directly with {."
 )
 
-_ENTITY_RELATION_PROMPT = """Given a passage from a {sector} engineering DPR, extract all important entities and the relations between them.
-Entities should be specific engineering elements (structures, parameters, materials, locations, standards).
-Relations should be concise verbs or phrases capturing the connection.
+# FIX 1: Single combined prompt — entity-relation triples AND event-entity pairs
+# in one LLM call instead of two serial calls.
+_COMBINED_EXTRACTION_PROMPT = """You are extracting structured knowledge from a {sector} engineering DPR passage.
 
-Output ONLY a JSON array:
-[
+Extract TWO things from the passage below:
+
+1. TRIPLES: entities and the relations between them.
+   - Entities: specific engineering elements (structures, parameters, materials, locations, standards)
+   - Relations: concise verb phrases
+
+2. EVENTS: engineering events/processes and the entities involved.
+   - Events: engineering actions, measurements, design decisions, compliance statements
+
+Passage:
+{text}
+
+Return ONLY a JSON object with exactly these two keys:
+{{
+  "triples": [
     {{"Head": "entity noun", "Relation": "verb phrase", "Tail": "entity noun"}},
     ...
-]
-
-Passage:
-{text}"""
-
-_EVENT_ENTITY_PROMPT = """From this {sector} engineering DPR passage, extract engineering events/processes and the entities involved.
-An event is a specific engineering action, measurement, design decision, or compliance statement.
-
-Output ONLY a JSON array:
-[
-    {{"Event": "engineering action or finding as a sentence", "Entity": ["entity1", "entity2"]}},
+  ],
+  "events": [
+    {{"Event": "engineering action or finding", "Entity": ["entity1", "entity2"]}},
     ...
-]
+  ]
+}}
 
-Passage:
-{text}"""
+Extract all meaningful triples and events. If none found, return empty arrays."""
 
-_CONCEPT_ENTITY_PROMPT = """Given this engineering ENTITY from a {sector} DPR, provide 2-4 abstract concept labels (1-2 words each) representing its TYPE or CATEGORY.
+# FIX 2: Batched concept induction — all entities + relations in one call
+_BATCH_CONCEPT_PROMPT = """You are labelling engineering entities and relations from a {sector} DPR with abstract concept types.
 
-Format: concept1, concept2, concept3
-No explanation. Just comma-separated labels.
+For each item below, provide 2-4 short concept labels (1-3 words each) describing its TYPE or CATEGORY.
 
-Examples:
-ENTITY: M30 concrete
-Answer: material, concrete grade, structural material
+Items:
+{items_json}
 
-ENTITY: pile foundation
-Answer: foundation type, substructure, structural element
+Return ONLY a JSON object where each key is the item text and the value is an array of concept labels:
+{{
+  "item text": ["concept1", "concept2"],
+  ...
+}}
 
-ENTITY: 7.5 m carriageway width
-Answer: geometric parameter, road dimension, design value
+Guidelines:
+- M30 concrete → ["material", "concrete grade"]
+- pile foundation → ["foundation type", "structural element"]
+- 7.5 m carriageway → ["geometric parameter", "design value"]
+- IRC:37 → ["standard", "design code"]
+- complies with → ["compliance", "regulatory"]
+- has bearing capacity of → ["property specification", "geotechnical property"]
 
-ENTITY: IRC:37
-Answer: standard, design code, regulatory document
-
-ENTITY: {entity}
-Answer:"""
-
-_CONCEPT_RELATION_PROMPT = """Given this engineering RELATION, provide 2-4 abstract concept labels (1-2 words each) for its TYPE.
-
-Format: concept1, concept2, concept3
-No explanation.
-
-Examples:
-RELATION: has bearing capacity of
-Answer: property specification, structural parameter, geotechnical property
-
-RELATION: complies with
-Answer: compliance, regulatory, standard reference
-
-RELATION: requires
-Answer: dependency, prerequisite, design requirement
-
-RELATION: {relation}
-Answer:"""
+Provide labels for ALL items. No item should be missing from the output."""
 
 
 # ─── Data classes ─────────────────────────────────────────────────────────────
@@ -122,7 +115,7 @@ class Triple:
     source_page: int = 0
     doc_id: str = ""
     sector: str = ""
-    triple_type: str = "entity_relation"  # "entity_relation" | "event_entity"
+    triple_type: str = "entity_relation"
 
 
 @dataclass
@@ -134,7 +127,7 @@ class KGExtractionResult:
     concept_map: dict[str, list[str]] = field(default_factory=dict)
 
 
-# ─── Text chunker (from AutoSchemaKG TextChunker) ────────────────────────────
+# ─── Text chunker ─────────────────────────────────────────────────────────────
 
 def chunk_text(text: str, chunk_size: int = 6000, overlap: int = 200) -> list[str]:
     """Split text into overlapping chunks on word boundaries."""
@@ -142,17 +135,13 @@ def chunk_text(text: str, chunk_size: int = 6000, overlap: int = 200) -> list[st
         return [text] if text else []
 
     words = text.split()
-    chunks = []
-    current_words = []
-    current_len = 0
+    chunks, current_words, current_len = [], [], 0
 
     for word in words:
         wlen = len(word) + 1
         if current_len + wlen > chunk_size and current_words:
             chunks.append(" ".join(current_words))
-            # Overlap: keep last N chars worth of words
-            overlap_words = []
-            overlap_len = 0
+            overlap_words, overlap_len = [], 0
             for w in reversed(current_words):
                 if overlap_len + len(w) + 1 > overlap:
                     break
@@ -165,46 +154,52 @@ def chunk_text(text: str, chunk_size: int = 6000, overlap: int = 200) -> list[st
 
     if current_words:
         chunks.append(" ".join(current_words))
-
     return chunks
 
 
-# ─── Triple extraction ────────────────────────────────────────────────────────
+# ─── FIX 1: Combined triple + event extraction (1 LLM call per chunk) ─────────
 
-def _parse_triples(raw: list | None, triple_type: str, doc_id: str, sector: str, page: int) -> list[Triple]:
-    """Parse raw LLM output into Triple objects."""
-    if not isinstance(raw, list):
+def _parse_combined_output(
+    raw: dict | None,
+    doc_id: str,
+    sector: str,
+    page_num: int,
+) -> list[Triple]:
+    """Parse the merged extraction JSON into Triple objects."""
+    if not isinstance(raw, dict):
         return []
 
     triples = []
-    for item in raw:
+
+    # Entity-relation triples
+    for item in raw.get("triples", []):
         if not isinstance(item, dict):
             continue
+        head = str(item.get("Head", "")).strip()
+        rel  = str(item.get("Relation", "")).strip()
+        tail = str(item.get("Tail", "")).strip()
+        if head and rel and tail:
+            triples.append(Triple(
+                head=head, relation=rel, tail=tail,
+                source_page=page_num, doc_id=doc_id, sector=sector,
+                triple_type="entity_relation",
+            ))
 
-        if triple_type == "entity_relation":
-            head = str(item.get("Head", "")).strip()
-            rel  = str(item.get("Relation", "")).strip()
-            tail = str(item.get("Tail", "")).strip()
-            if head and rel and tail:
-                triples.append(Triple(
-                    head=head, relation=rel, tail=tail,
-                    source_page=page, doc_id=doc_id, sector=sector,
-                    triple_type="entity_relation"
-                ))
-
-        elif triple_type == "event_entity":
-            event = str(item.get("Event", "")).strip()
-            entities = item.get("Entity", [])
-            if event and entities:
-                # Create one triple per entity: entity -[participates_in]-> event
-                for ent in entities:
-                    ent = str(ent).strip()
-                    if ent:
-                        triples.append(Triple(
-                            head=ent, relation="participates in", tail=event,
-                            source_page=page, doc_id=doc_id, sector=sector,
-                            triple_type="event_entity"
-                        ))
+    # Event-entity triples → head participates_in event
+    for item in raw.get("events", []):
+        if not isinstance(item, dict):
+            continue
+        event    = str(item.get("Event", "")).strip()
+        entities = item.get("Entity", [])
+        if event and entities:
+            for ent in entities:
+                ent = str(ent).strip()
+                if ent:
+                    triples.append(Triple(
+                        head=ent, relation="participates in", tail=event,
+                        source_page=page_num, doc_id=doc_id, sector=sector,
+                        triple_type="event_entity",
+                    ))
 
     return triples
 
@@ -215,84 +210,71 @@ def extract_triples_from_chunk(
     doc_id: str,
     page_num: int,
 ) -> list[Triple]:
-    """Extract entity-relation and event-entity triples from one text chunk."""
-    all_triples = []
-
-    # Entity-relation triples
-    prompt1 = _ENTITY_RELATION_PROMPT.format(sector=sector, text=text[:4000])
-    raw1 = generate_json(prompt1, system=_TRIPLE_SYSTEM, model=get_model_for_task(TaskType.EXTRACTION))
-    all_triples.extend(_parse_triples(raw1, "entity_relation", doc_id, sector, page_num))
-
-    # Event-entity triples
-    prompt2 = _EVENT_ENTITY_PROMPT.format(sector=sector, text=text[:4000])
-    raw2 = generate_json(prompt2, system=_TRIPLE_SYSTEM, model=get_model_for_task(TaskType.EXTRACTION))
-    all_triples.extend(_parse_triples(raw2, "event_entity", doc_id, sector, page_num))
-
-    return all_triples
+    """
+    Extract entity-relation and event-entity triples from one text chunk.
+    FIX 1: Single combined LLM call (was 2 serial calls).
+    """
+    prompt = _COMBINED_EXTRACTION_PROMPT.format(sector=sector, text=text[:4500])
+    raw = generate_json(prompt, system=_TRIPLE_SYSTEM, model=get_model_for_task(TaskType.EXTRACTION))
+    return _parse_combined_output(raw, doc_id, sector, page_num)
 
 
-# ─── Concept induction ────────────────────────────────────────────────────────
-
-def _parse_concepts(raw_text: str) -> list[str]:
-    """Parse comma-separated concept labels from LLM output."""
-    if not raw_text:
-        return []
-    concepts = [c.strip().lower() for c in raw_text.split(",") if c.strip()]
-    # Filter: max 3 words per concept, no empty
-    concepts = [c for c in concepts if c and len(c.split()) <= 3]
-    return concepts[:5]  # cap at 5 concepts per entity
-
+# ─── FIX 2: Batched concept induction (1-2 LLM calls per page, was ~60) ───────
 
 def induce_concepts(
     entities: list[str],
     relations: list[str],
     sector: str,
-    batch_size: int = 20,
+    batch_size: int = 60,
 ) -> dict[str, list[str]]:
     """
-    For each unique entity and relation, generate abstract concept labels.
-    Returns concept_map: {entity_or_relation: [concept1, concept2, ...]}
-    Batches to minimize LLM calls.
+    Generate abstract concept labels for all entities and relations in one batch call.
+    FIX 2: Was one LLM call per entity/relation (~60 calls/page).
+    Now: 1-2 calls per page using a structured batch prompt.
+
+    batch_size controls how many items go into one prompt (keep ≤80 for context limits).
     """
     concept_map: dict[str, list[str]] = {}
 
-    # Deduplicate
-    unique_entities  = list(set(e.lower() for e in entities if e.strip()))[:100]
-    unique_relations = list(set(r.lower() for r in relations if r.strip()))[:50]
+    # Deduplicate and normalise
+    unique_entities  = list(dict.fromkeys(e.lower() for e in entities  if e.strip()))[:80]
+    unique_relations = list(dict.fromkeys(r.lower() for r in relations if r.strip()))[:40]
+    all_items = unique_entities + unique_relations
 
-    # Process entities in batches
-    for i in range(0, len(unique_entities), batch_size):
-        batch = unique_entities[i:i + batch_size]
-        for entity in batch:
-            prompt = _CONCEPT_ENTITY_PROMPT.format(sector=sector, entity=entity)
-            raw = generate(prompt, temperature=0.1, model=get_model_for_task(TaskType.CONCEPT))
-            concept_map[entity] = _parse_concepts(raw)
+    if not all_items:
+        return concept_map
 
-    # Process relations in batches
-    for i in range(0, len(unique_relations), batch_size):
-        batch = unique_relations[i:i + batch_size]
-        for relation in batch:
-            prompt = _CONCEPT_RELATION_PROMPT.format(relation=relation)
-            raw = generate(prompt, temperature=0.1, model=get_model_for_task(TaskType.CONCEPT))
-            concept_map[relation] = _parse_concepts(raw)
+    # Process in batches (1 prompt per batch_size items)
+    for i in range(0, len(all_items), batch_size):
+        batch = all_items[i : i + batch_size]
+        items_json = json.dumps(batch, ensure_ascii=False)
+        prompt = _BATCH_CONCEPT_PROMPT.format(sector=sector, items_json=items_json)
+
+        raw = generate_json(
+            prompt,
+            model=get_model_for_task(TaskType.CONCEPT),
+        )
+
+        if not isinstance(raw, dict):
+            # Fallback: assign empty concepts so items aren't missing from map
+            for item in batch:
+                concept_map[item] = []
+            continue
+
+        for item in batch:
+            concepts = raw.get(item, [])
+            if isinstance(concepts, list):
+                # Normalise: lowercase, max 3 words each, cap at 5
+                clean = [c.strip().lower() for c in concepts if isinstance(c, str) and c.strip()]
+                clean = [c for c in clean if len(c.split()) <= 3]
+                concept_map[item] = clean[:5]
+            else:
+                concept_map[item] = []
 
     return concept_map
 
 
-# ─── Neo4j writer ─────────────────────────────────────────────────────────────
-
-def _neo4j_label_from_concepts(concepts: list[str]) -> str:
-    """
-    Pick the most specific concept label to use as Neo4j additional label.
-    Returns a clean label string safe for Cypher (alphanumeric + underscore).
-    """
-    if not concepts:
-        return ""
-    label = concepts[0]
-    # Sanitize: title-case, remove non-alphanum
-    label = re.sub(r"[^a-zA-Z0-9\s]", "", label).title().replace(" ", "_")
-    return label if label else ""
-
+# ─── FIX 3: Batched Neo4j writes (UNWIND — 3 queries total, was 3N queries) ────
 
 def write_triples_to_neo4j(
     triples: list[Triple],
@@ -302,18 +284,18 @@ def write_triples_to_neo4j(
     dry_run: bool = False,
 ) -> int:
     """
-    Write triples to Neo4j as nodes + edges.
-    Node structure:
-        (:Entity {id, label, concepts, sector, doc_id})
-    Edge structure:
-        -[:TRIPLE {relation, relation_concepts, source_page, doc_id}]->
-
-    Returns count of triples written.
+    Write all triples to Neo4j in 3 bulk queries using UNWIND.
+    FIX 3: Was 3 individual run_write() calls per triple (3N round-trips).
+    Now: 3 UNWIND queries total regardless of triple count.
     """
-    if dry_run:
+    if dry_run or not triples:
         return len(triples)
 
-    written = 0
+    # ── Build node + edge parameter lists ─────────────────────────────────────
+
+    head_nodes, tail_nodes, edges = [], [], []
+    seen_node_ids: set[str] = set()
+
     for triple in triples:
         head_id   = f"{doc_id}::{triple.head.lower()}"
         tail_id   = f"{doc_id}::{triple.tail.lower()}"
@@ -321,89 +303,80 @@ def write_triples_to_neo4j(
         tail_conc = concept_map.get(triple.tail.lower(), [])
         rel_conc  = concept_map.get(triple.relation.lower(), [])
 
-        # Merge head node
-        run_write(
-            f"""
-            MERGE (h:Entity {{entity_id: $hid}})
-            SET h.label    = $head,
-                h.concepts = $hconc,
-                h.sector   = $sector,
-                h.doc_id   = $doc_id,
-                h.node_type = $ntype
-            WITH h
-            MATCH (d:Document {{doc_id: $doc_id}})
-            MERGE (d)-[:HAS_ENTITY]->(h)
-            WITH h
-            MATCH (s:Sector {{name: $sector_name}})
-            MERGE (h)-[:BELONGS_TO]->(s)
-            """,
-            {
-                "hid":         head_id,
-                "head":        triple.head,
-                "hconc":       head_conc,
-                "sector":      sector,
-                "doc_id":      doc_id,
-                "ntype":       "event" if triple.triple_type == "event_entity" else "entity",
-                "sector_name": sector,
-            }
-        )
+        if head_id not in seen_node_ids:
+            head_nodes.append({
+                "entity_id":  head_id,
+                "label":      triple.head,
+                "concepts":   head_conc,
+                "sector":     sector,
+                "doc_id":     doc_id,
+                "node_type":  "event" if triple.triple_type == "event_entity" else "entity",
+            })
+            seen_node_ids.add(head_id)
 
-        # Merge tail node
-        run_write(
-            f"""
-            MERGE (t:Entity {{entity_id: $tid}})
-            SET t.label    = $tail,
-                t.concepts = $tconc,
-                t.sector   = $sector,
-                t.doc_id   = $doc_id,
-                t.node_type = $ntype
-            WITH t
-            MATCH (d:Document {{doc_id: $doc_id}})
-            MERGE (d)-[:HAS_ENTITY]->(t)
-            """,
-            {
-                "tid":    tail_id,
-                "tail":   triple.tail,
-                "tconc":  tail_conc,
-                "sector": sector,
-                "doc_id": doc_id,
-                "ntype":  "entity",
-            }
-        )
+        if tail_id not in seen_node_ids:
+            tail_nodes.append({
+                "entity_id":  tail_id,
+                "label":      triple.tail,
+                "concepts":   tail_conc,
+                "sector":     sector,
+                "doc_id":     doc_id,
+                "node_type":  "entity",
+            })
+            seen_node_ids.add(tail_id)
 
-        # Merge edge (triple)
-        run_write(
-            f"""
-            MATCH (h:Entity {{entity_id: $hid}})
-            MATCH (t:Entity {{entity_id: $tid}})
-            MERGE (h)-[r:TRIPLE {{
-                relation: $relation,
-                doc_id:   $doc_id
-            }}]->(t)
-            SET r.relation_concepts = $rconc,
-                r.source_page       = $page,
-                r.triple_type       = $ttype,
-                r.triple_id         = $tid_r,
-                r.sector            = $sector
-            """,
-            {
-                "hid":      head_id,
-                "tid":      tail_id,
-                "relation": triple.relation,
-                "rconc":    rel_conc,
-                "page":     triple.source_page,
-                "ttype":    triple.triple_type,
-                "tid_r":    triple.triple_id,
-                "doc_id":   doc_id,
-                "sector":   sector,
-            }
-        )
-        written += 1
+        edges.append({
+            "head_id":          head_id,
+            "tail_id":          tail_id,
+            "relation":         triple.relation,
+            "relation_concepts": rel_conc,
+            "source_page":      triple.source_page,
+            "triple_type":      triple.triple_type,
+            "triple_id":        triple.triple_id,
+            "doc_id":           doc_id,
+            "sector":           sector,
+        })
 
-    return written
+    all_nodes = head_nodes + tail_nodes  # already deduped
 
+    # ── Query 1: Upsert all entity nodes in one UNWIND ────────────────────────
+    run_write(
+        f"""
+        UNWIND $nodes AS n
+        MERGE (e:{NodeLabel.ENTITY} {{entity_id: n.entity_id}})
+        SET e.label     = n.label,
+            e.concepts  = n.concepts,
+            e.sector    = n.sector,
+            e.doc_id    = n.doc_id,
+            e.node_type = n.node_type
+        WITH e, n
+        MATCH (d:{NodeLabel.DOCUMENT} {{doc_id: n.doc_id}})
+        MERGE (d)-[:{RelType.HAS_ENTITY}]->(e)
+        WITH e, n
+        MATCH (s:{NodeLabel.SECTOR} {{name: n.sector}})
+        MERGE (e)-[:{RelType.BELONGS_TO}]->(s)
+        """,
+        {"nodes": all_nodes},
+    )
 
-# ─── Also write concept nodes as OntologyClass ───────────────────────────────
+    # ── Query 2: Upsert all TRIPLE edges in one UNWIND ────────────────────────
+    run_write(
+        f"""
+        UNWIND $edges AS edge
+        MATCH (h:{NodeLabel.ENTITY} {{entity_id: edge.head_id}})
+        MATCH (t:{NodeLabel.ENTITY} {{entity_id: edge.tail_id}})
+        MERGE (h)-[r:{RelType.TRIPLE} {{relation: edge.relation, doc_id: edge.doc_id}}]->(t)
+        SET r.relation_concepts = edge.relation_concepts,
+            r.source_page       = edge.source_page,
+            r.triple_type       = edge.triple_type,
+            r.triple_id         = edge.triple_id,
+            r.sector            = edge.sector
+        """,
+        {"edges": edges},
+    )
+
+    return len(triples)
+
 
 def write_concept_schema_to_neo4j(
     concept_map: dict[str, list[str]],
@@ -411,30 +384,56 @@ def write_concept_schema_to_neo4j(
     doc_id: str,
 ):
     """
-    Write unique concept labels as OntologyClass nodes.
-    This creates the schema layer — the induced ontology.
+    Write unique concept labels as OntologyClass nodes in one UNWIND query.
+    FIX 3 (continued): Was one run_write() per concept.
     """
-    all_concepts = set()
-    for concepts in concept_map.values():
-        all_concepts.update(concepts)
+    all_concepts = list({c for concepts in concept_map.values() for c in concepts if c.strip()})
+    if not all_concepts:
+        return
 
-    for concept in all_concepts:
-        if not concept.strip():
-            continue
-        run_write(
-            f"""
-            MERGE (o:OntologyClass {{name: $name, sector: $sector}})
-            SET o.ontology_id = $oid,
-                o.doc_id      = $doc_id,
-                o.is_induced  = true
-            """,
-            {
-                "name":   concept,
-                "sector": sector,
-                "oid":    str(uuid.uuid4()),
-                "doc_id": doc_id,
-            }
-        )
+    run_write(
+        f"""
+        UNWIND $concepts AS cname
+        MERGE (o:{NodeLabel.ONTOLOGY} {{name: cname, sector: $sector}})
+        SET o.doc_id     = $doc_id,
+            o.is_induced = true
+        """,
+        {"concepts": all_concepts, "sector": sector, "doc_id": doc_id},
+    )
+
+
+# ─── FIX 4: Page-level disk cache ─────────────────────────────────────────────
+
+def _page_cache_path(doc_id: str, page_num: int) -> Path:
+    cache_dir = PROCESSED_DIR / doc_id / "kg_page_cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir / f"page_{page_num:05d}.json"
+
+
+def _load_page_cache(doc_id: str, page_num: int) -> list[dict] | None:
+    """Return cached triples_data list for a page, or None if not cached."""
+    p = _page_cache_path(doc_id, page_num)
+    if p.exists():
+        try:
+            return json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
+            return None
+    return None
+
+
+def _save_page_cache(doc_id: str, page_num: int, triples_data: list[dict]):
+    """Persist triples_data for a page to disk."""
+    p = _page_cache_path(doc_id, page_num)
+    p.write_text(json.dumps(triples_data, ensure_ascii=False), encoding="utf-8")
+
+
+def clear_page_cache(doc_id: str):
+    """Delete all per-page cache files for a document (for --force-rebuild)."""
+    cache_dir = PROCESSED_DIR / doc_id / "kg_page_cache"
+    if cache_dir.exists():
+        for f in cache_dir.glob("page_*.json"):
+            f.unlink()
+        logger.info(f"Cleared page cache for {doc_id}")
 
 
 # ─── Public API ───────────────────────────────────────────────────────────────
@@ -446,12 +445,14 @@ def build_kg_from_page(
     page_num: int,
     write_to_db: bool = True,
     induce_schema: bool = True,
+    use_cache: bool = True,
 ) -> KGExtractionResult:
     """
     Full KG construction for a single page:
-    1. Extract triples (entity-relation + event-entity)
-    2. Induce concepts (schema)
-    3. Write to Neo4j
+      1. Check disk cache (FIX 4) — skip Ollama if already extracted
+      2. Extract triples using merged prompt (FIX 1) — 1 call/chunk not 2
+      3. Induce concepts in batch (FIX 2) — 1-2 calls/page not ~60
+      4. Write to Neo4j using UNWIND (FIX 3) — 2 queries not 3N
 
     Returns KGExtractionResult with all extracted data.
     """
@@ -460,45 +461,94 @@ def build_kg_from_page(
     if not text or len(text.strip()) < 50:
         return result
 
-    # Step 1: Chunk if needed and extract triples
+    # ── FIX 4: Try cache first ─────────────────────────────────────────────
+    if use_cache:
+        cached = _load_page_cache(doc_id, page_num)
+        if cached is not None:
+            # Reconstruct result from cache (skip all Ollama calls)
+            triples = []
+            concept_map = {}
+            for t in cached:
+                triple = Triple(
+                    head=t["head"], relation=t["relation"], tail=t["tail"],
+                    triple_type=t.get("triple_type", "entity_relation"),
+                    source_page=page_num, doc_id=doc_id, sector=sector,
+                    head_concepts=t.get("head_concepts", []),
+                    tail_concepts=t.get("tail_concepts", []),
+                    relation_concepts=t.get("relation_concepts", []),
+                )
+                triples.append(triple)
+                concept_map.update({
+                    triple.head.lower():     triple.head_concepts,
+                    triple.tail.lower():     triple.tail_concepts,
+                    triple.relation.lower(): triple.relation_concepts,
+                })
+            result.triples      = triples
+            result.all_entities = list(set([t.head for t in triples] + [t.tail for t in triples]))
+            result.all_relations = list(set(t.relation for t in triples))
+            result.concept_map  = concept_map
+
+            if write_to_db and triples:
+                write_triples_to_neo4j(triples, concept_map, doc_id, sector)
+                if induce_schema:
+                    write_concept_schema_to_neo4j(concept_map, sector, doc_id)
+            return result
+
+    # ── FIX 1: Chunk → 1 combined LLM call per chunk (not 2) ──────────────
     chunks = chunk_text(text, chunk_size=5000, overlap=150)
-    all_triples = []
+    all_triples: list[Triple] = []
     for chunk in chunks:
         triples = extract_triples_from_chunk(chunk, sector, doc_id, page_num)
         all_triples.extend(triples)
 
-    result.triples = all_triples
-    result.all_entities  = list(set(
-        [t.head for t in all_triples] + [t.tail for t in all_triples]
-    ))
+    result.triples       = all_triples
+    result.all_entities  = list(set([t.head for t in all_triples] + [t.tail for t in all_triples]))
     result.all_relations = list(set(t.relation for t in all_triples))
 
     logger.debug(
         f"Page {page_num + 1}: {len(all_triples)} triples, "
-        f"{len(result.all_entities)} entities, "
-        f"{len(result.all_relations)} relations"
+        f"{len(result.all_entities)} entities"
     )
 
     if not all_triples:
+        _save_page_cache(doc_id, page_num, [])
         return result
 
-    # Step 2: Concept induction (schema layer)
-    concept_map = {}
+    # ── FIX 2: Batch concept induction (1-2 calls, not ~60) ───────────────
+    concept_map: dict[str, list[str]] = {}
     if induce_schema:
         concept_map = induce_concepts(
-            result.all_entities[:40],   # limit per page to keep runtime reasonable
-            result.all_relations[:20],
+            result.all_entities[:80],
+            result.all_relations[:40],
             sector,
         )
         result.concept_map = concept_map
 
-    # Attach concepts back to triples
+    # Attach concepts back to triple objects
     for triple in all_triples:
         triple.head_concepts     = concept_map.get(triple.head.lower(), [])
         triple.tail_concepts     = concept_map.get(triple.tail.lower(), [])
         triple.relation_concepts = concept_map.get(triple.relation.lower(), [])
 
-    # Step 3: Write to Neo4j
+    # ── FIX 4: Save to disk cache before Neo4j write ───────────────────────
+    triples_data = [
+        {
+            "head":              t.head,
+            "relation":         t.relation,
+            "tail":             t.tail,
+            "triple_type":      t.triple_type,
+            "head_concepts":    t.head_concepts,
+            "relation_concepts": t.relation_concepts,
+            "tail_concepts":    t.tail_concepts,
+            "source_page":      page_num,
+            "doc_id":           doc_id,
+            "sector":           sector,
+        }
+        for t in all_triples
+    ]
+    _save_page_cache(doc_id, page_num, triples_data)
+
+    # ── FIX 3: UNWIND batch write (2 queries, not 3N) ─────────────────────
     if write_to_db:
         written = write_triples_to_neo4j(all_triples, concept_map, doc_id, sector)
         if induce_schema:
@@ -508,22 +558,24 @@ def build_kg_from_page(
     return result
 
 
+# ─── Neo4j stats ──────────────────────────────────────────────────────────────
+
 def get_kg_stats(doc_id: str) -> dict:
     """Return triple/entity/concept counts for a document from Neo4j."""
     entity_count = run_read(
-        "MATCH (d:Document {doc_id: $id})-[:HAS_ENTITY]->(e:Entity) RETURN count(e) AS cnt",
+        f"MATCH (d:{NodeLabel.DOCUMENT} {{doc_id: $id}})-[:{RelType.HAS_ENTITY}]->(e:{NodeLabel.ENTITY}) RETURN count(e) AS cnt",
         {"id": doc_id}
     )
     triple_count = run_read(
-        "MATCH (e:Entity {doc_id: $id})-[r:TRIPLE]->() RETURN count(r) AS cnt",
+        f"MATCH (e:{NodeLabel.ENTITY} {{doc_id: $id}})-[r:{RelType.TRIPLE}]->() RETURN count(r) AS cnt",
         {"id": doc_id}
     )
     concept_count = run_read(
-        "MATCH (o:OntologyClass {doc_id: $id}) RETURN count(o) AS cnt",
+        f"MATCH (o:{NodeLabel.ONTOLOGY} {{doc_id: $id}}) RETURN count(o) AS cnt",
         {"id": doc_id}
     )
     return {
-        "entities":  entity_count[0]["cnt"] if entity_count else 0,
-        "triples":   triple_count[0]["cnt"] if triple_count else 0,
-        "concepts":  concept_count[0]["cnt"] if concept_count else 0,
+        "entities": entity_count[0]["cnt"] if entity_count else 0,
+        "triples":  triple_count[0]["cnt"] if triple_count else 0,
+        "concepts": concept_count[0]["cnt"] if concept_count else 0,
     }

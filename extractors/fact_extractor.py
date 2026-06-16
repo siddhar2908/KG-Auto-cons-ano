@@ -89,30 +89,34 @@ def _build_extraction_prompt(text: str, sector: str, page_num: int, doc_id: str)
     sector_key = SECTOR_KEYS.get(sector, "")
     hints = SECTOR_EXTRACTION_HINTS.get(sector_key, "Focus on engineering parameters, quantities, and costs.")
 
-    return f"""Extract engineering facts from the following DPR text (page {page_num + 1}, sector: {sector}).
+    return f"""Extract ALL engineering facts from this {sector} DPR text (page {page_num + 1}).
 
 {hints}
+
+Also extract:
+- Project costs (e.g. "total cost is Rs. 63,246 crore" → subject: project, attribute: total cost, value: 63246, unit: crore Rs.)
+- Quantities in narrative sentences (e.g. "237 bore holes of 30m depth" → two facts)
+- Operational parameters (speed, headway, capacity, frequency)
+- Any measurement mentioned even in passing
 
 TEXT:
 \"\"\"
 {text}
 \"\"\"
 
-Return a JSON array of fact objects. Each object MUST have these exact keys:
+Return a JSON array. Each object MUST have:
 - "fact_type": one of ["parameter", "measurement", "material", "cost", "schedule", "assumption", "design_value"]
-- "subject": the engineering element this fact describes (e.g. "pile foundation", "carriageway")
-- "attribute": the specific property (e.g. "length", "bearing capacity", "thickness")
-- "value": the numeric or categorical value as a string (e.g. "250", "M30", "Class AA")
-- "unit": unit of measurement (e.g. "kN/m²", "mm", "km") — use empty string if not applicable
-- "context": verbatim sentence or phrase from the text containing this fact (≤ 200 chars)
-- "confidence": float 0.0–1.0 (how clearly is this stated in the text?)
+- "subject": engineering element described (e.g. "pile foundation", "corridor 3", "station")
+- "attribute": specific property (e.g. "length", "total cost", "design speed")
+- "value": the value as a string — numeric preferred (e.g. "63246", "M30", "80")
+- "unit": unit (e.g. "crore Rs.", "km", "kmph") — empty string if none
+- "context": the sentence containing this fact (≤ 200 chars)
+- "confidence": 0.85–1.0 for clearly stated facts, 0.7–0.85 for implied facts
 
-Rules:
-- Only include facts EXPLICITLY stated in the text
-- Numeric values must be extractable
-- If no clear facts exist, return []
-- Do not repeat the same fact twice
-- Ignore administrative or procedural text"""
+Extract aggressively — include facts stated in prose, tables, and lists.
+Extract costs, distances, counts, speeds, capacities, depths, heights.
+If no engineering facts at all, return [].
+Do not repeat identical facts."""
 
 
 # ─── Neo4j writer ─────────────────────────────────────────────────────────────

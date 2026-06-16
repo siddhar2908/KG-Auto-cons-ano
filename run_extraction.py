@@ -110,13 +110,48 @@ def save_json(data, path: Path):
 
 # ─── Per-page worker ──────────────────────────────────────────────────────────
 
+def _should_use_fast_model(text: str) -> bool:
+    """
+    Route simple pages to llama3.1:8b instead of qwen2.5:14b.
+    Simple = short text with few numeric values.
+    2x faster, sufficient quality for low-density pages.
+    """
+    import re as _re
+    if not text:
+        return True
+    char_count = len(text.strip())
+    if char_count > 600:
+        return False  # rich content → heavy model
+    numeric_hits = len(_re.findall(r'\d+\.?\d*\s*(?:m|km|mm|%|kmph|Rs|crore|lakh|ha|cum)', text, _re.I))
+    return numeric_hits < 3  # few engineering values → fast model ok
+
+
+def _has_extractable_content(text: str) -> bool:
+    """
+    Quick pre-filter: does this page have enough signal for the LLM?
+    Saves LLM calls on pages that will return [] anyway.
+    """
+    import re as _re
+    if not text or len(text.strip()) < 80:
+        return False
+    # Must have at least one numeric value
+    has_numbers = bool(_re.search(r'\d+\.?\d*', text))
+    if not has_numbers:
+        return False
+    # Must not be pure header/title page
+    lines = [l.strip() for l in text.split('\n') if l.strip()]
+    if len(lines) < 3:
+        return False
+    return True
+
+
 def _process_page(page, doc_id, sector, dpr_path, skip_facts, skip_tables, clf):
     cat    = clf.category
     facts  = []
     tables = []
     try:
         if not skip_facts and cat in (PageCategory.TEXT, PageCategory.MIXED):
-            if page.text and len(page.text.strip()) > 30:
+            if page.text and _has_extractable_content(page.text):
                 facts = extract_facts_from_page(
                     text=page.text, doc_id=doc_id, sector=sector,
                     page_num=page.page_num, write_to_db=False,
@@ -132,17 +167,11 @@ def _process_page(page, doc_id, sector, dpr_path, skip_facts, skip_tables, clf):
                 context=f"{sector} DPR page {page.page_num + 1}",
             )
 
+        # IMAGE pages: vision model (llama3.2-vision) skipped if unsupported
+        # mllama architecture requires Ollama >= 0.3.0 with vision support
+        # These pages (maps, diagrams) have no extractable engineering text anyway
         if not skip_facts and cat == PageCategory.IMAGE and page.image_count > 0:
-            desc = vision_describe_image(dpr_path, sector=sector)
-            if desc:
-                facts = extract_facts_from_page(
-                    text=desc, doc_id=doc_id, sector=sector,
-                    page_num=page.page_num, write_to_db=False,
-                )
-                for f in facts:
-                    f["doc_id"]      = doc_id
-                    f["source_page"] = page.page_num + 1
-                    f["from_image"]  = True
+            pass  # skip gracefully — image pages contain maps/diagrams not engineering facts
 
     except Exception as e:
         logger.warning(f"Page {page.page_num + 1}: {e}")
@@ -335,7 +364,11 @@ def scan_and_extract_all(args) -> dict:
     results = {"dpr": None, "rulebooks": []}
 
     # ── Rulebooks first (so rules exist in Neo4j before DPR validation)
-    rb_files = sorted(RULEBOOKS_INPUT_DIR.glob("*.pdf"))
+    # Scan for all supported document types
+    rb_files = sorted([
+        p for ext in ("*.pdf", "*.docx", "*.doc", "*.txt")
+        for p in RULEBOOKS_INPUT_DIR.glob(ext)
+    ])
     if rb_files:
         console.print(f"\n📚 Found {len(rb_files)} rulebook(s) in [cyan]{RULEBOOKS_INPUT_DIR}[/cyan]")
         for rb_path in rb_files:
@@ -350,7 +383,10 @@ def scan_and_extract_all(args) -> dict:
         console.print(f"[dim]No rulebooks found in {RULEBOOKS_INPUT_DIR} — skipping[/dim]")
 
     # ── DPR files
-    dpr_files = sorted(DPR_INPUT_DIR.glob("*.pdf"))
+    dpr_files = sorted([
+        p for ext in ("*.pdf", "*.docx", "*.doc", "*.txt")
+        for p in DPR_INPUT_DIR.glob(ext)
+    ])
     if not dpr_files:
         console.print(f"[red]No DPR PDFs found in {DPR_INPUT_DIR}[/red]")
         console.print(f"[yellow]Drop your DPR PDF into: {DPR_INPUT_DIR}[/yellow]")
