@@ -159,6 +159,7 @@ def _process_page(page, doc_id, sector, dpr_path, skip_facts, skip_tables, clf):
                 for f in facts:
                     f["doc_id"]      = doc_id
                     f["source_page"] = page.page_num + 1
+                    f["sector"]      = sector        # ← critical: same bug as rules had
 
         if not skip_tables and cat in (PageCategory.TABLE, PageCategory.MIXED):
             tables = extract_tables_from_page(
@@ -322,8 +323,9 @@ def extract_rulebook(
             return []
         rules = extract_rules_from_text(page.text, standard_name, sector, write_to_db=False)
         for r in rules:
-            r["doc_id"] = doc_id
+            r["doc_id"]      = doc_id
             r["source_page"] = page.page_num + 1
+            r["sector"]      = sector          # ← critical: sector must be on every rule
         return rules
 
     with Progress(SpinnerColumn(), TextColumn("{task.description}"),

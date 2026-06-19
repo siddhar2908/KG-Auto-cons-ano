@@ -364,47 +364,64 @@ def push_document_node(metadata: dict, dry_run: bool):
     )
 
 
-def push_facts(facts: list[dict], dry_run: bool) -> int:
+def push_facts(facts: list[dict], dry_run: bool, metadata_sector: str = "") -> int:
+    """
+    Push facts to Neo4j.
+    metadata_sector: sector from DPR metadata.json — used as fallback when
+    individual fact dicts have no 'sector' field (legacy extraction runs).
+    """
     if dry_run:
         return len(facts)
-    pushed = 0
+
+    fact_params = []
     for fact in facts:
-        fact_id = str(uuid.uuid4())
+        fact_sector = str(fact.get("sector", "")).strip() or metadata_sector
+        fact_params.append({
+            "doc_id":      fact.get("doc_id", ""),
+            "fact_id":     str(uuid.uuid4()),
+            "fact_type":   fact.get("fact_type", "parameter"),
+            "subject":     fact.get("subject", ""),
+            "attribute":   fact.get("attribute", ""),
+            "value":       str(fact.get("value", "")),
+            "unit":        fact.get("unit", ""),
+            "context":     str(fact.get("context", ""))[:400],
+            "confidence":  float(fact.get("confidence", 0.5)),
+            "page":        int(fact.get("source_page", 0)),
+            "sector":      fact_sector,
+        })
+
+    if not fact_params:
+        return 0
+
+    # Batch in chunks of 500 to keep transaction size reasonable
+    BATCH_SIZE = 500
+    pushed = 0
+    for i in range(0, len(fact_params), BATCH_SIZE):
+        batch = fact_params[i : i + BATCH_SIZE]
         run_write(
             f"""
-            MATCH (d:{NodeLabel.DOCUMENT} {{doc_id: $doc_id}})
-            MERGE (f:{NodeLabel.FACT} {{fact_id: $fact_id}})
-            SET f.fact_type   = $fact_type,
-                f.subject     = $subject,
-                f.attribute   = $attribute,
-                f.value       = $value,
-                f.unit        = $unit,
-                f.context     = $context,
-                f.confidence  = $confidence,
-                f.source_page = $page,
-                f.sector      = $sector,
-                f.doc_id      = $doc_id
+            UNWIND $facts AS fact
+            MATCH (d:{NodeLabel.DOCUMENT} {{doc_id: fact.doc_id}})
+            MERGE (f:{NodeLabel.FACT} {{fact_id: fact.fact_id}})
+            SET f.fact_type   = fact.fact_type,
+                f.subject     = fact.subject,
+                f.attribute   = fact.attribute,
+                f.value       = fact.value,
+                f.unit        = fact.unit,
+                f.context     = fact.context,
+                f.confidence  = fact.confidence,
+                f.source_page = fact.page,
+                f.sector      = fact.sector,
+                f.doc_id      = fact.doc_id
             MERGE (d)-[:{RelType.HAS_FACT}]->(f)
-            WITH f
-            MATCH (s:{NodeLabel.SECTOR} {{name: $sector_name}})
+            WITH f, fact
+            MATCH (s:{NodeLabel.SECTOR} {{name: fact.sector}})
             MERGE (f)-[:{RelType.BELONGS_TO}]->(s)
             """,
-            {
-                "doc_id":      fact.get("doc_id", ""),
-                "fact_id":     fact_id,
-                "fact_type":   fact.get("fact_type", "parameter"),
-                "subject":     fact.get("subject", ""),
-                "attribute":   fact.get("attribute", ""),
-                "value":       str(fact.get("value", "")),
-                "unit":        fact.get("unit", ""),
-                "context":     str(fact.get("context", ""))[:400],
-                "confidence":  float(fact.get("confidence", 0.5)),
-                "page":        int(fact.get("source_page", 0)),
-                "sector":      fact.get("sector", ""),
-                "sector_name": fact.get("sector", ""),
-            }
+            {"facts": batch}
         )
-        pushed += 1
+        pushed += len(batch)
+
     return pushed
 
 
@@ -451,47 +468,60 @@ def push_table_facts(tables: dict, doc_id: str, sector: str, dry_run: bool) -> i
     return pushed
 
 
-def push_rules(rules: list[dict], dry_run: bool) -> int:
+def push_rules(rules: list[dict], dry_run: bool, metadata_sector: str = "") -> int:
+    """
+    Push rules to Neo4j.
+    metadata_sector: sector from rulebook metadata.json — used as fallback
+    when individual rule dicts have no 'sector' field (legacy extraction runs).
+    """
     if dry_run:
         return len(rules)
-    pushed = 0
+
+    # Resolve sector for each rule: prefer rule-level sector, fall back to metadata
+    rule_params = []
     for rule in rules:
-        run_write(
-            f"""
-            MERGE (r:{NodeLabel.RULE} {{
-                standard_name: $std,
-                clause:        $clause,
-                attribute:     $attribute
-            }})
-            ON CREATE SET r.rule_id = $rule_id
-            SET r.rule_text  = $rule_text,
-                r.operator   = $operator,
-                r.threshold  = $threshold,
-                r.unit       = $unit,
-                r.condition  = $condition,
-                r.severity   = $severity,
-                r.sector     = $sector
-            WITH r
-            MATCH (s:{NodeLabel.SECTOR} {{name: $sector_name}})
-            MERGE (r)-[:{RelType.BELONGS_TO}]->(s)
-            """,
-            {
-                "rule_id":   str(uuid.uuid4()),
-                "std":       rule.get("standard_name", ""),
-                "clause":    rule.get("clause", ""),
-                "attribute": rule.get("attribute", ""),
-                "rule_text": str(rule.get("rule_text", ""))[:500],
-                "operator":  rule.get("operator", "must_be"),
-                "threshold": str(rule.get("threshold", "")),
-                "unit":      rule.get("unit", ""),
-                "condition": rule.get("condition", ""),
-                "severity":  rule.get("severity", "HIGH"),
-                "sector":    rule.get("sector", ""),
-                "sector_name": rule.get("sector", ""),
-            }
-        )
-        pushed += 1
-    return pushed
+        rule_sector = rule.get("sector", "").strip() or metadata_sector
+        rule_params.append({
+            "rule_id":    str(uuid.uuid4()),
+            "std":        rule.get("standard_name", ""),
+            "clause":     rule.get("clause", ""),
+            "attribute":  rule.get("attribute", ""),
+            "rule_text":  str(rule.get("rule_text", ""))[:500],
+            "operator":   rule.get("operator", "must_be"),
+            "threshold":  str(rule.get("threshold", "")),
+            "unit":       rule.get("unit", ""),
+            "condition":  rule.get("condition", ""),
+            "severity":   rule.get("severity", "HIGH"),
+            "sector":     rule_sector,
+        })
+
+    if not rule_params:
+        return 0
+
+    # UNWIND for efficiency — one round-trip for all rules
+    run_write(
+        f"""
+        UNWIND $rules AS rule
+        MERGE (r:{NodeLabel.RULE} {{
+            standard_name: rule.std,
+            clause:        rule.clause,
+            attribute:     rule.attribute
+        }})
+        ON CREATE SET r.rule_id = rule.rule_id
+        SET r.rule_text  = rule.rule_text,
+            r.operator   = rule.operator,
+            r.threshold  = rule.threshold,
+            r.unit       = rule.unit,
+            r.condition  = rule.condition,
+            r.severity   = rule.severity,
+            r.sector     = rule.sector
+        WITH r, rule
+        MATCH (s:{NodeLabel.SECTOR} {{name: rule.sector}})
+        MERGE (r)-[:{RelType.BELONGS_TO}]->(s)
+        """,
+        {"rules": rule_params}
+    )
+    return len(rule_params)
 
 
 # ─── Stats table printer ──────────────────────────────────────────────────────
@@ -563,7 +593,7 @@ def main():
                 )
                 if rules_raw and not args.dry_run:
                     push_document_node(meta, args.dry_run)
-                    pushed = push_rules(rules_raw, args.dry_run)
+                    pushed = push_rules(rules_raw, args.dry_run, metadata_sector=sector_rb)
                     total_pushed["rules"] += pushed
                     console.print(f"     → Pushed [green]{pushed}[/green] rules")
             except Exception as e:
@@ -606,7 +636,7 @@ def main():
             # Push document node
             push_document_node(metadata, args.dry_run)
             # Push ALL normalized facts — every page occurrence preserved
-            pushed_facts = push_facts(facts_norm, args.dry_run)
+            pushed_facts = push_facts(facts_norm, args.dry_run, metadata_sector=sector)
             pushed_tables = push_table_facts(tables_clean, doc_id, sector, args.dry_run)
             total_pushed["facts"]      = pushed_facts
             total_pushed["table_rows"] = pushed_tables

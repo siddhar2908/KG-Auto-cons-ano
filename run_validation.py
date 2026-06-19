@@ -31,6 +31,18 @@ import argparse
 import json
 from pathlib import Path
 
+# ── Force UTF-8 stdout on Windows so emoji/Rich output never silently fails ──
+# Without this, cmd.exe / PowerShell default codepages (cp1252/cp437) can
+# raise UnicodeEncodeError inside console.print(), which on some Windows
+# terminal setups produces NO visible output at all instead of a traceback.
+if sys.platform == "win32":
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+
+# Guaranteed first line — proves the script started, before any import can fail silently
+print("Starting run_validation.py...", flush=True)
+
 from loguru import logger
 from rich.console import Console
 from rich.panel import Panel
@@ -222,12 +234,16 @@ def _print_results_table(rows: list[dict], border_color: str):
 
 def main():
     args = parse_args()
+    print(f"Args parsed: doc_id={args.doc_id!r}, sector={args.sector!r}, from_state={args.from_state}", flush=True)
 
     doc_id = args.doc_id
     sector = args.sector
 
     # Auto-load from state
     state_file = Path("output/.extraction_state.json")
+    print(f"Looking for state file at: {state_file.resolve()}", flush=True)
+    print(f"State file exists: {state_file.exists()}", flush=True)
+
     if (doc_id is None or args.from_state) and state_file.exists():
         state    = json.loads(state_file.read_text(encoding="utf-8"))
         dpr_state = state.get("dpr", {})
@@ -243,6 +259,13 @@ def main():
         console.print(
             "[red]No document found. "
             "Run the full pipeline first or pass --doc-id explicitly.[/red]"
+        )
+        print(
+            "ERROR: No doc_id available. Either:\n"
+            "  1. Pass --doc-id explicitly: python run_validation.py --doc-id <id>\n"
+            "  2. Or ensure output/.extraction_state.json exists in the current "
+            "directory (run this script from the same folder as run_extraction.py)",
+            flush=True,
         )
         sys.exit(1)
 
@@ -262,7 +285,7 @@ def main():
         console.print("[red]Sector unknown. Use --sector.[/red]")
         sys.exit(1)
 
-    # Check rules are loaded
+    # Check rules are loaded — also check for stale state (doc_id mismatch)
     rule_count_result = run_read(
         f"MATCH (r:{NodeLabel.RULE})-[:BELONGS_TO]->(:Sector {{name: $sector}}) "
         f"RETURN count(r) AS cnt",
@@ -272,9 +295,37 @@ def main():
     console.print(f"📚 Rules in Neo4j for {sector}: [bold]{rule_count}[/bold]")
 
     if rule_count == 0:
+        # Diagnose: check if this doc_id's facts are even in Neo4j
+        fact_count_result = run_read(
+            f"MATCH (d:{NodeLabel.DOCUMENT} {{doc_id: $id}})-[:HAS_FACT]->(f) "
+            f"RETURN count(f) AS cnt",
+            {"id": doc_id}
+        )
+        fact_count = fact_count_result[0]["cnt"] if fact_count_result else 0
+
+        # Check what docs ARE in Neo4j
+        docs_in_db = run_read(
+            "MATCH (d:Document) RETURN d.doc_id AS id, d.sector AS sector LIMIT 10", {}
+        )
+        db_doc_ids = [d["id"] for d in docs_in_db if d["id"]]
+
+        console.print(Panel(
+            f"[red bold]No rules found in Neo4j for sector: {sector}[/red bold]\n\n"
+            f"Facts for doc_id [cyan]{doc_id}[/cyan] in Neo4j: [bold]{fact_count}[/bold]\n"
+            f"Documents currently in Neo4j: [dim]{', '.join(db_doc_ids) or 'none'}[/dim]\n\n"
+            "[yellow]This usually means run_push.py was not run for this document.[/yellow]\n\n"
+            "Fix: run the full pipeline from step 2:\n"
+            f"  [bold]python run_push.py[/bold]\n"
+            f"  [bold]python run_kg_build.py[/bold]\n"
+            f"  [bold]python run_engines.py[/bold]\n"
+            f"  [bold]python run_validation.py[/bold]\n\n"
+            "If your state file is stale (old doc_id), re-run:\n"
+            f"  [bold]python run_extraction.py[/bold]  (will re-extract and update state)",
+            title="[red]Pipeline State Error — Rules Missing[/red]",
+            border_style="red",
+        ))
         console.print(
-            "[yellow]⚠ No rules found for this sector. "
-            "Load rulebooks first with run_extraction.py --rulebook.[/yellow]"
+            "[dim]Note: Continuing with completeness check and rulebook KG semantic matching only.[/dim]"
         )
 
     console.rule("[bold]Validation Engine — Rulebook Compliance[/bold]")

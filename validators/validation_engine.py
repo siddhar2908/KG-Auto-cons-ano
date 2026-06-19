@@ -92,8 +92,21 @@ class ValidationRow:
 # ─── Numeric comparison ───────────────────────────────────────────────────────
 
 def _extract_num(s: str) -> Optional[float]:
+    """
+    Extract a single numeric value from a string.
+    Returns None if the string contains multiple distinct numbers
+    (e.g. "minimum 5.3 m for doubling; 7.8 m for 3rd line") — these are
+    descriptive thresholds that cannot be compared as a single value.
+    """
+    nums = re.findall(r"-?\d+(?:\.\d+)?", str(s))
+    if not nums:
+        return None
+    # Multiple distinct numbers → descriptive threshold, cannot extract one value
+    unique = set(float(n) for n in nums)
+    if len(unique) > 1:
+        return None
     try:
-        return float(re.sub(r"[^\d.\-]", "", str(s)))
+        return float(nums[0])
     except (ValueError, TypeError):
         return None
 
@@ -102,23 +115,63 @@ def _compare(fact_val: str, operator: str, threshold: str) -> Optional[bool]:
     """
     Apply operator between fact value and rule threshold.
     Returns True (compliant), False (non-compliant), None (cannot compare).
+
+    Returns None instead of a wrong answer when:
+      - Threshold has multiple distinct numbers → descriptive sentence,
+        cannot pick one canonical value.
+        e.g. "Minimum 5.3 m for doubling; 7.8 m for 3rd line" → None
+      - Threshold mixes text and numbers and fact is non-numeric.
+        e.g. fact="Standard-IV", threshold="Standard-IV for 160 km" → None
+      - Operator is not ==  /  must_be but values are non-numeric.
+
+    Callers treat None as "needs LLM review".
+    None is NEVER automatically classified as Non-Compliant.
     """
     fv = _extract_num(fact_val)
     tv = _extract_num(threshold)
 
     if fv is None or tv is None:
+        # How many distinct numbers does the threshold contain?
+        threshold_nums = re.findall(r"-?\d+(?:\.\d+)?", str(threshold))
+        threshold_has_numbers = len(threshold_nums) > 0
+        threshold_multi_nums  = len(set(float(n) for n in threshold_nums)) > 1
+
         if operator == "==":
-            return fact_val.strip().lower() == threshold.strip().lower()
+            fv_s = fact_val.strip().lower()
+            tv_s = threshold.strip().lower()
+
+            # Case 1: pure string threshold (no numbers) — string match is safe
+            if not threshold_has_numbers:
+                if fv_s == tv_s:
+                    return True
+                if tv_s in fv_s or fv_s in tv_s:
+                    return True
+                return None
+
+            # Case 2: single number in threshold and fact is also purely numeric
+            # → extract both and compare
+            if not threshold_multi_nums and fv is not None and tv is not None:
+                return abs(fv - tv) < 1e-9
+
+            # Case 3: descriptive threshold with multiple numbers or mixed text+number
+            # Cannot reliably compare — send to LLM
+            return None
+
         if operator == "must_be":
             return threshold.strip().lower() in fact_val.strip().lower()
+        if operator == "must_not_be":
+            return threshold.strip().lower() not in fact_val.strip().lower()
+
+        # All other operators with non-numeric values → cannot compare
         return None
 
+    # Both sides numeric
     ops = {
         ">=": fv >= tv,
         "<=": fv <= tv,
         ">":  fv > tv,
         "<":  fv < tv,
-        "==": abs(fv - tv) < 1e-6,
+        "==": abs(fv - tv) < 1e-9,
     }
     if operator in ops:
         return ops[operator]
@@ -126,7 +179,9 @@ def _compare(fact_val: str, operator: str, threshold: str) -> Optional[bool]:
     if operator == "in_range":
         parts = re.findall(r"[\d.]+", str(threshold))
         if len(parts) >= 2:
-            return float(parts[0]) <= fv <= float(parts[1])
+            lo, hi = float(parts[0]), float(parts[-1])
+            return lo <= fv <= hi
+        return None
 
     return None
 
@@ -256,12 +311,17 @@ def _match_facts_to_rules(doc_id: str, sector: str) -> list[ValidationRow]:
                 f"per {p['std']} {p['clause']}. This needs to be corrected."
             )
         else:
-            # Cannot compare numerically — will be resolved by LLM in stage 2
+            # result is None: threshold is descriptive / multi-value / non-numeric.
+            # Cannot determine compliance automatically.
+            # Mark as "Needs Review" — the LLM enrichment stage will make the call.
+            # Use classification="Non-Compliant" so it goes through LLM enrichment,
+            # but set a clear reason so the LLM knows to reconsider.
             classification = "Non-Compliant"
             reason = (
-                f"The DPR value for {p['fattr']} is '{dpr_display}'. "
+                f"NEEDS_LLM_REVIEW: The DPR reports {p['fattr']} as {dpr_display}. "
                 f"The rule requires {rule_display} per {p['std']} {p['clause']}. "
-                f"This could not be automatically verified and needs manual review."
+                f"The threshold is descriptive and cannot be compared automatically — "
+                f"LLM review required to determine compliance."
             )
 
         rows.append(ValidationRow(
@@ -375,15 +435,16 @@ def _match_facts_to_rules(doc_id: str, sector: str) -> list[ValidationRow]:
                         f"(Matched semantically, similarity={best_sim:.2f})"
                     )
                 else:
+                    # Cannot compare — send to LLM with a clear flag
                     classification = "Non-Compliant"
                     reason = (
-                        f"The DPR contains a semantically similar parameter "
-                        f"'{fact.get('fattr','')} ({fact.get('fsubj','')})' "
-                        f"(similarity={best_sim:.2f} to rule attribute "
-                        f"'{rule.get('rattr','')}'), "
-                        f"but the value could not be automatically compared. "
-                        f"Manual review needed for {rule.get('std','')} "
-                        f"{rule.get('clause','')}."
+                        f"NEEDS_LLM_REVIEW: The DPR parameter "
+                        f"'{fact.get('fattr','')} {fact.get('fsubj','')}' "
+                        f"(similarity={best_sim:.2f}) matches rule for "
+                        f"'{rule.get('rattr','')}', but the rule threshold "
+                        f"'{rule.get('rthresh','')}' is descriptive and cannot be "
+                        f"compared automatically. LLM review required for "
+                        f"{rule.get('std','')} {rule.get('clause','')}."
                     )
 
                 rows.append(ValidationRow(
@@ -443,6 +504,14 @@ def _llm_enrich_rows(rows: list[ValidationRow]) -> list[ValidationRow]:
             for j, r in enumerate(batch)
         )
 
+        has_needs_review = any("NEEDS_LLM_REVIEW" in r.reason for r in batch)
+        review_note = (
+            "\n\nIMPORTANT: Some checks are marked NEEDS_LLM_REVIEW — these have "
+            "descriptive thresholds that could not be compared automatically. "
+            "For these, you MUST determine compliance yourself based on engineering judgment. "
+            "If the DPR value satisfies the rule requirement (even if stated differently), "
+            "classify as Compliant. If not, classify as Non-Compliant with a specific reason."
+        ) if has_needs_review else ""
         prompt = (
             f"You are a senior {batch[0].sector} infrastructure engineer reviewing a DPR "
             f"for compliance against engineering standards.\n\n"
@@ -458,8 +527,10 @@ def _llm_enrich_rows(rows: list[ValidationRow]) -> list[ValidationRow]:
             '"severity": "CRITICAL|HIGH|MEDIUM|LOW", '
             '"reason": "plain English reason ≤200 chars"}\n\n'
             "Only override classification to Compliant if you are confident the check "
-            "was incorrectly flagged (e.g. unit mismatch in extraction). "
+            "was incorrectly flagged (e.g. unit mismatch in extraction, or DPR value "
+            "meets the requirement under a different phrasing). "
             "Upgrade severity to CRITICAL only for safety-critical issues."
+            + review_note
         )
 
         results = generate_json(prompt)
@@ -497,20 +568,85 @@ def _llm_enrich_rows(rows: list[ValidationRow]) -> list[ValidationRow]:
 # Checked BEFORE embedding so deterministic synonyms are free (no Ollama call).
 # Add entries here as you discover false-negatives in production.
 _PARAM_SYNONYMS: dict[str, list[str]] = {
+    # Earthwork
     "embankment volume":   ["embankment qty", "embankment quantity", "filling quantity",
-                            "earthwork filling", "bank quantity", "earth filling volume"],
+                            "earthwork filling", "bank quantity", "earth filling volume",
+                            "earthwork in formation", "fill volume", "embankment fill"],
     "cutting volume":      ["cutting qty", "cutting quantity", "excavation volume",
-                            "earthwork cutting", "excavation quantity"],
+                            "earthwork cutting", "excavation quantity",
+                            "earthwork in cutting", "cut volume"],
     "max bank height":     ["maximum bank height", "max embankment height", "bank height",
-                            "maximum fill height", "embankment height"],
+                            "maximum fill height", "embankment height", "maximum bank"],
     "max cutting depth":   ["maximum cutting depth", "cutting depth", "max excavation depth",
-                            "maximum excavation depth"],
+                            "maximum excavation depth", "maximum depth in cutting",
+                            "maximum depth of cutting"],
+
+    # Bridges / waterway
     "bridge count":        ["number of bridges", "no of bridges", "total bridges",
-                            "bridges count", "bridge quantity"],
+                            "bridges count", "bridge quantity", "important bridges",
+                            "major bridges", "minor bridges", "no. of bridges",
+                            "nos. of bridges", "bridges proposed"],
+    "carriageway width":   ["road width", "formation width bridge", "deck width",
+                            "bridge width", "road carriageway", "carriage way",
+                            "carriageway", "roadway width", "width of carriageway",
+                            "clear roadway width", "road way"],
+    "hfl":                 ["high flood level", "highest flood level", "design flood level",
+                            "hfl elevation", "dfl", "flood level", "high water level",
+                            "hwl", "highest water level", "h.f.l", "h.w.l",
+                            "design high flood level", "maximum flood level"],
+    "scour depth":         ["maximum scour", "design scour", "scour", "scour level",
+                            "scour protection depth", "afflux", "depth of scour",
+                            "maximum depth of scour", "scour below hfl"],
+
+    # Alignment
     "curve percentage":    ["percentage of curves", "curved track", "curve length",
-                            "horizontal curves", "curvature"],
+                            "horizontal curves", "curvature", "percentage of total length",
+                            "% curves", "percent curves", "curve proportion"],
     "total number of stations": ["number of stations", "no of stations", "station count",
-                                 "total stations"],
+                                 "total stations", "no. of stations", "stations proposed",
+                                 "no of halt", "nos of stations"],
+
+    # Cost / financial
+    "estimated cost":      ["total cost", "project cost", "current estimated cost",
+                            "estimated completion cost", "cost estimate", "total project cost",
+                            "estimated project cost", "project cost estimate",
+                            "cost of project", "total estimated cost", "project cost crore",
+                            "revised cost", "updated cost"],
+
+    # Track / electrical
+    "number of psrs":      ["psr", "number of psr", "permanent speed restriction",
+                            "speed restriction count", "no of psr", "no. of psr",
+                            "psrs", "speed restrictions"],
+    "design speed":        ["maximum speed", "max speed", "design speed kmph",
+                            "permissible speed", "line speed", "maximum permissible speed",
+                            "speed potential", "maximum operating speed"],
+    "track centre spacing":["track centre", "track center spacing", "track centers",
+                            "distance between tracks", "inter-track distance",
+                            "track centers distance", "centre to centre distance tracks",
+                            "c/c distance", "track centre distance", "track spacing",
+                            "distance for 3rd line", "distance for third line",
+                            "3rd line spacing", "fourth line spacing"],
+    "design axle load":    ["axle load", "maximum axle load", "axle loading",
+                            "permissible axle load", "axle weight"],
+    "minimum formation width": ["formation width", "cess width", "embankment top width",
+                                "subgrade width", "formation top width",
+                                "top width of formation"],
+    "curve radius":        ["minimum radius", "horizontal curve radius", "radius of curve",
+                            "degree of curve", "curve degree", "minimum curve radius"],
+    "gradient":            ["ruling gradient", "maximum gradient", "grade", "slope",
+                            "longitudinal gradient", "ruling grade", "max gradient"],
+
+    # Signalling / electrical
+    "provision of ei":     ["electronic interlocking", "ei", "interlocking",
+                            "route relay interlocking", "rri", "panel interlocking"],
+    "track km":            ["track kilometer", "track kilometre", "tkm", "t.km",
+                            "track kms", "total track km"],
+    "sectioning post":     ["sp", "sectioning and paralleling", "sectioning post",
+                            "s&p post"],
+    "sub-sectioning post": ["ssp", "sub sectioning", "sub-sectioning and paralleling"],
+    "traction sub station":["tss", "traction substation", "sub-station", "substation"],
+    "scada":               ["supervisory control", "remote terminal unit", "rtu",
+                            "scada system"],
 }
 
 # Semantic similarity threshold for completeness (slightly lower than fact-rule
@@ -688,77 +824,219 @@ def _check_mandatory_parameters(doc_id: str, sector: str) -> list[ValidationRow]
     return rows
 
 
-# ─── Stage 4: Semantic matching (FAISS) ───────────────────────────────────────
+# ─── Stage 4: Rulebook-KG semantic matching (FAISS over rule triples) ────────
+
+def _get_rulebook_id(doc_id: str) -> str | None:
+    """
+    Find the rulebook doc_id for the current pipeline run.
+    Reads from output/.extraction_state.json.
+    Falls back to None if not found (semantic matching is skipped gracefully).
+    """
+    from pathlib import Path as _Path
+    state_file = _Path("output/.extraction_state.json")
+    if not state_file.exists():
+        return None
+    try:
+        import json as _json
+        state = _json.loads(state_file.read_text(encoding="utf-8"))
+        # New format: kg_build.rulebook_id
+        rb_id = state.get("kg_build", {}).get("rulebook_id")
+        if rb_id:
+            return rb_id
+        # Fallback: rulebooks list from extraction state
+        rbs = state.get("rulebooks", [])
+        if rbs:
+            return rbs[0].get("doc_id")
+    except Exception:
+        pass
+    return None
+
 
 def _semantic_fact_rule_matching(doc_id: str, sector: str) -> list[ValidationRow]:
     """
-    FAISS semantic matching — find Rule nodes that semantically match KG triples
-    even when attribute strings don't exactly overlap.
-    Falls back gracefully if FAISS indexes don't exist.
+    FAISS semantic matching against the RULEBOOK KG (not the DPR KG).
+
+    Architecture:
+      - The rulebook KG was built by run_kg_build.py --source rulebook
+      - Its FAISS edge index encodes rule triples:
+          (design speed) → [shall be] → (>=160 km/h per RDSO §X)
+      - For each DPR fact, we embed the fact text and search the RULE edge index
+      - High-similarity matches (≥ 0.80) are candidates for value comparison
+      - Value is then compared deterministically using the matched Rule node
+
+    This replaces searching DPR triples against rule attributes —
+    instead we search rule triples against DPR facts.
     """
-    rows = []
-    try:
-        from extractors.kg_embeddings import search_edges
-        from config.settings import PROCESSED_DIR
+    from config.settings import PROCESSED_DIR, get_applicable_sectors
+    applicable_sectors = get_applicable_sectors(sector)
 
-        index_path = PROCESSED_DIR / doc_id / "faiss" / "edges.index"
-        if not index_path.exists():
-            logger.debug("No FAISS edge index found — skipping semantic matching")
-            return []
-
-        rules = run_read(
-            f"""
-            MATCH (r:{NodeLabel.RULE})-[:{RelType.BELONGS_TO}]->(s:{NodeLabel.SECTOR} {{name: $sector}})
-            RETURN r.rule_id AS rid, r.attribute AS attr, r.rule_text AS text,
-                   r.threshold AS threshold, r.operator AS op, r.unit AS unit,
-                   r.standard_name AS std, r.clause AS clause, r.severity AS sev
-            """,
-            {"sector": sector}
-        )
-        if not rules:
-            return []
-
-        for rule in rules:
-            query = f"{rule.get('attr', '')} {rule.get('text', '')}"
-            similar_edges = search_edges(query, doc_id, top_k=5)
-
-            for edge in similar_edges:
-                if edge["score"] < 0.75:
-                    continue
-                severity = rule.get("sev") or Severity.MEDIUM
-                rule_display = _describe_operator(
-                    str(rule.get("op", "")),
-                    str(rule.get("threshold", "")),
-                    str(rule.get("unit", "")),
-                )
-                rows.append(ValidationRow(
-                    row_id=str(uuid.uuid4()),
-                    classification="Non-Compliant",
-                    check_area=str(rule.get("attr", "")).title(),
-                    category=str(rule.get("std", "")),
-                    dpr_value=edge["triple_string"],
-                    rule_expected=rule_display,
-                    standard=f"{rule.get('std', '')} {rule.get('clause', '')}".strip(),
-                    severity=severity,
-                    reason=(
-                        f"A semantically similar statement was found in the DPR "
-                        f"(similarity score: {edge['score']:.2f}), but it could not be "
-                        f"automatically verified against the rule. Manual review is needed "
-                        f"to confirm compliance with {rule.get('std', '')} {rule.get('clause', '')}."
-                    ),
-                    source_page=0,
-                    weight=SEVERITY_WEIGHTS.get(severity, 2),
-                    rule_id=str(rule.get("rid", "")),
-                    doc_id=doc_id,
-                    sector=sector,
-                ))
-
-        logger.info(f"Semantic matching: {len(rows)} candidate rows found")
-        return rows
-
-    except Exception as e:
-        logger.debug(f"Semantic matching skipped: {e}")
+    # Find rulebook FAISS index
+    rulebook_id = _get_rulebook_id(doc_id)
+    if not rulebook_id:
+        logger.debug("No rulebook_id in state — skipping rulebook semantic matching")
         return []
+
+    rb_index_path = PROCESSED_DIR / rulebook_id / "faiss" / "edges.index"
+    if not rb_index_path.exists():
+        logger.debug(
+            f"No rulebook FAISS index at {rb_index_path}. "
+            "Run: python run_kg_build.py --source rulebook"
+        )
+        return []
+
+    try:
+        from extractors.kg_embeddings import search_edges as _search_edges
+        import numpy as np
+    except ImportError as e:
+        logger.debug(f"FAISS/embedding dependencies not available: {e}")
+        return []
+
+    # Load all DPR facts to embed
+    all_facts = run_read(
+        f"""
+        MATCH (d:{NodeLabel.DOCUMENT} {{doc_id: $doc_id}})-[:{RelType.HAS_FACT}]->(f:{NodeLabel.FACT})
+        WHERE f.fact_type <> 'table_row'
+        RETURN f.fact_id AS fid, f.attribute AS fattr, f.subject AS fsubj,
+               f.value AS fval, f.unit AS funit, f.source_page AS fpage
+        LIMIT 2000
+        """,
+        {"doc_id": doc_id}
+    )
+    if not all_facts:
+        logger.debug("No facts found for semantic matching")
+        return []
+
+    # Load all Rule nodes (for value comparison after semantic match)
+    all_rules = run_read(
+        f"""
+        MATCH (r:{NodeLabel.RULE})-[:{RelType.BELONGS_TO}]->(s:{NodeLabel.SECTOR})
+        WHERE s.name IN $applicable_sectors
+        RETURN r.rule_id AS rid, r.attribute AS rattr, r.threshold AS rthresh,
+               r.unit AS runit, r.operator AS rop, r.standard_name AS std,
+               r.clause AS clause, r.severity AS rsev, r.rule_text AS rtext
+        """,
+        {"applicable_sectors": applicable_sectors}
+    )
+    # Build lookup: rule_attribute_lower → rule (for fast matching after FAISS)
+    rule_lookup: dict[str, dict] = {}
+    for r in all_rules:
+        key = str(r.get("rattr", "")).lower().strip()
+        if key:
+            rule_lookup[key] = r
+
+    rows = []
+    seen_pairs: set[tuple] = set()
+    THRESHOLD = 0.80
+
+    # For each DPR fact: search the RULEBOOK edge index
+    # The edge index contains rule triples like "design speed shall be >= 160 km/h"
+    for fact in all_facts:
+        fact_text = f"{fact.get('fattr','')} {fact.get('fsubj','')}".strip()
+        if not fact_text:
+            continue
+
+        # Search rulebook edge index with fact text
+        similar_rule_triples = _search_edges(fact_text, rulebook_id, top_k=3)
+
+        for edge in similar_rule_triples:
+            if edge["score"] < THRESHOLD:
+                continue
+
+            # edge["triple_string"] = "design speed shall be >= 160 km/h"
+            # Find the matching Rule node by extracting the head entity
+            triple_str = edge.get("triple_string", "")
+            head_word  = triple_str.split()[0].lower() if triple_str else ""
+
+            # Try to find matching rule by attribute similarity
+            matched_rule = None
+            best_rule_match = 0.0
+            for rattr_key, rule in rule_lookup.items():
+                # Simple word overlap score
+                fact_words = set(fact.get("fattr", "").lower().split())
+                rule_words = set(rattr_key.split())
+                overlap = len(fact_words & rule_words) / max(len(fact_words | rule_words), 1)
+                if overlap > best_rule_match:
+                    best_rule_match = overlap
+                    matched_rule = rule
+
+            if not matched_rule or best_rule_match < 0.25:
+                # No genuine rule governs this fact — word overlap too weak to be
+                # meaningful (e.g. "cost per km" vs "total cost" share only "cost").
+                # Do NOT create a finding here: a triple-string match with no
+                # confirmed rule attribute is not evidence of non-compliance.
+                # Skip silently — this fact simply isn't covered by any rule.
+                continue
+
+            rule = matched_rule
+            pair_key = (fact["fid"], rule["rid"])
+            if pair_key in seen_pairs:
+                continue
+            seen_pairs.add(pair_key)
+
+            severity    = rule.get("rsev") or Severity.HIGH
+            weight      = SEVERITY_WEIGHTS.get(severity, 2)
+            dpr_display = f"{fact.get('fval','')} {fact.get('funit','')}".strip()
+            rule_display = _describe_operator(
+                str(rule.get("rop", "")),
+                str(rule.get("rthresh", "")),
+                str(rule.get("runit", "")),
+            )
+            result = _compare(
+                fact.get("fval", ""),
+                str(rule.get("rop", "")),
+                str(rule.get("rthresh", "")),
+            )
+
+            if result is True:
+                classification = "Compliant"
+                reason = (
+                    f"The DPR reports '{fact.get('fattr','')}' as {dpr_display}, "
+                    f"which meets the requirement of {rule_display} per "
+                    f"{rule.get('std','')} {rule.get('clause','')}. "
+                    f"(Rule matched via rulebook KG, similarity={edge['score']:.2f})"
+                )
+            elif result is False:
+                classification = "Non-Compliant"
+                reason = (
+                    f"The DPR reports '{fact.get('fattr','')}' as {dpr_display}, "
+                    f"but the rule requires {rule_display} per "
+                    f"{rule.get('std','')} {rule.get('clause','')}. "
+                    f"(Rule matched via rulebook KG, similarity={edge['score']:.2f})"
+                )
+            else:
+                # Cannot compare — flag for LLM review
+                classification = "Non-Compliant"
+                reason = (
+                    f"NEEDS_LLM_REVIEW: DPR parameter '{fact.get('fattr','')}' "
+                    f"matched rule '{rule.get('rattr','')}' via rulebook KG "
+                    f"(similarity={edge['score']:.2f}), but rule threshold "
+                    f"'{rule.get('rthresh','')}' is descriptive — "
+                    f"LLM review required for {rule.get('std','')} {rule.get('clause','')}."
+                )
+
+            rows.append(ValidationRow(
+                row_id=str(uuid.uuid4()),
+                classification=classification,
+                check_area=str(rule.get("rattr", "")).title(),
+                category=str(rule.get("std", "")),
+                dpr_value=dpr_display,
+                rule_expected=rule_display,
+                standard=f"{rule.get('std','')} {rule.get('clause','')}".strip(),
+                severity=severity,
+                reason=reason,
+                source_page=int(fact.get("fpage") or 0),
+                weight=weight,
+                fact_id=str(fact["fid"]),
+                rule_id=str(rule["rid"]),
+                doc_id=doc_id,
+                sector=sector,
+            ))
+
+    logger.info(
+        f"Rulebook KG semantic matching: {len(rows)} candidates "
+        f"from {len(all_facts)} facts vs rulebook FAISS index ({rulebook_id})"
+    )
+    return rows
 
 
 # ─── Write rows to Neo4j ──────────────────────────────────────────────────────
